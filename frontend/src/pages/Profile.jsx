@@ -5,8 +5,8 @@ import toast from 'react-hot-toast'
 import { gsap } from 'gsap'
 import { useAuthStore } from '../context/authStore'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-const STATIC_URL = 'http://localhost:5000'
+const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL
+const STATIC_URL = import.meta.env.VITE_STATIC_URL
 
 export default function Profile() {
   const { user, setUser } = useAuthStore()

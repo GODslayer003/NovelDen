@@ -59,7 +59,7 @@ export default function NewsAdmin() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this announcement?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/news/${id}`);
+      await axios.delete(`${import.meta.env.VITE_API_URL}/news/${id}`);
       toast.success('Announcement deleted');
       fetchData();
     } catch (err) {
@@ -139,7 +139,7 @@ export default function NewsAdmin() {
               <div key={item._id} className="bg-espresso/40 p-5 rounded-2xl border border-coffee-800 flex gap-4">
                 <div className="w-12 h-12 rounded-full bg-coffee-800 overflow-hidden flex-shrink-0">
                   {item.writerId?.avatarUrl ? (
-                    <img src={`http://localhost:5000${item.writerId.avatarUrl}`} alt="" className="w-full h-full object-cover" />
+                    <img src={`${import.meta.env.VITE_STATIC_URL}${item.writerId.avatarUrl}`} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xl">✍️</div>
                   )}
@@ -155,13 +155,13 @@ export default function NewsAdmin() {
                   <p className="text-sm text-coffee-200 mb-3 whitespace-pre-wrap">{item.content}</p>
                   
                   {item.mediaUrl && item.mediaType === 'image' && (
-                    <img src={`http://localhost:5000${item.mediaUrl}`} alt="Attached" className="max-h-48 rounded-lg" />
+                    <img src={`${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} alt="Attached" className="max-h-48 rounded-lg" />
                   )}
                   {item.mediaUrl && item.mediaType === 'video' && (
-                    <video src={`http://localhost:5000${item.mediaUrl}`} controls className="max-h-48 rounded-lg" />
+                    <video src={`${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} controls className="max-h-48 rounded-lg" />
                   )}
                   {item.mediaUrl && item.mediaType === 'music' && (
-                    <audio src={`http://localhost:5000${item.mediaUrl}`} controls className="w-full" />
+                    <audio src={`${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} controls className="w-full" />
                   )}
                 </div>
               </div>

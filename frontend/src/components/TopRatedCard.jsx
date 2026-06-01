@@ -63,7 +63,7 @@ export default function TopRatedCard({ book, index }) {
           {/* Image */}
           <div className="relative w-full md:w-44 h-48 md:h-auto flex-shrink-0 overflow-hidden">
             <img
-              src={(book.cover || '').startsWith('http') ? book.cover : 'http://localhost:5000' + (book.cover || '')}
+              src={(book.cover || '').startsWith('http') ? book.cover : import.meta.env.VITE_STATIC_URL + (book.cover || '')}
               alt={book.title}
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
             />

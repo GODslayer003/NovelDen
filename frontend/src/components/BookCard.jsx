@@ -66,7 +66,7 @@ export default function BookCard({ book, index }) {
           {/* Cover image */}
           <div className="relative h-56 overflow-hidden">
             <img
-              src={(book.cover || '').startsWith('http') ? book.cover : 'http://localhost:5000' + (book.cover || '')}
+              src={(book.cover || '').startsWith('http') ? book.cover : import.meta.env.VITE_STATIC_URL + (book.cover || '')}
               alt={book.title}
               className="w-full h-full object-cover transition-transform duration-700"
               style={{ transform: hovered ? 'scale(1.1)' : 'scale(1)' }}

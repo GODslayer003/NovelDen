@@ -38,7 +38,7 @@ export default function WritersAdmin() {
 
     try {
       if (editingId) {
-        await axios.put(`http://localhost:5000/api/writers/${editingId}`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await axios.put(`${import.meta.env.VITE_API_URL}/writers/${editingId}`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
         toast.success('Writer updated');
       } else {
         await axios.post('http://localhost:5000/api/writers', data, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -62,7 +62,7 @@ export default function WritersAdmin() {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this writer?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/writers/${id}`);
+      await axios.delete(`${import.meta.env.VITE_API_URL}/writers/${id}`);
       toast.success('Writer deleted');
       fetchWriters();
     } catch (err) {
@@ -132,7 +132,7 @@ export default function WritersAdmin() {
                 <div key={w._id} className="rounded-2xl p-5 flex items-center gap-4 bg-espresso/60 border border-coffee-800">
                   <div className="w-16 h-16 rounded-full overflow-hidden bg-coffee-900 flex-shrink-0">
                     {w.avatarUrl ? (
-                      <img src={`http://localhost:5000${w.avatarUrl}`} alt="" className="w-full h-full object-cover" />
+                      <img src={`${import.meta.env.VITE_STATIC_URL}${w.avatarUrl}`} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center font-bold text-xl">{w.name[0]}</div>
                     )}

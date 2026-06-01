@@ -10,7 +10,7 @@ export default function UsersAdmin() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/users?search=${search}`);
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/users?search=${search}`);
       setUsers(res.data);
     } catch (err) {
       toast.error('Failed to load users');
@@ -36,7 +36,7 @@ export default function UsersAdmin() {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
     
     try {
-      await axios.delete(`http://localhost:5000/api/users/${id}`);
+      await axios.delete(`${import.meta.env.VITE_API_URL}/users/${id}`);
       toast.success('User deleted');
       fetchUsers();
       fetchStats();
