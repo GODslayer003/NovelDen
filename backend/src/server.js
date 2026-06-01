@@ -19,7 +19,7 @@ config({ path: path.join(__dirname, '../../.env') })
 const app  = express()
 const PORT = process.env.PORT || 5000
 
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, { family: 4 })
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err))
 
