@@ -99,6 +99,36 @@ const sendMailWithRetries = async (transporter, mailOptions) => {
   }
 };
 
+// Send email via Brevo (Sendinblue) HTTP API
+const sendViaBrevo = async (toEmail, subject, htmlContent) => {
+  const apiKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
+  if (!apiKey) throw new Error('No Brevo API key');
+
+  const senderEmail = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@novelden.app';
+  const payload = {
+    sender: { name: 'Novel Den', email: senderEmail },
+    to: [{ email: toEmail }],
+    subject,
+    htmlContent: htmlContent,
+  };
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': apiKey,
+    },
+    body: JSON.stringify(payload),
+    // small timeout can be implemented by AbortController if needed
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Brevo API error ${res.status}: ${text}`);
+  }
+  return await res.json();
+};
+
 const scheduleBackgroundSend = (email, otp) => {
   // Attempt background retries without blocking the request
   setTimeout(async () => {
@@ -141,6 +171,16 @@ const sendOtpEmail = async (email, otp, options = { ensureDelivery: false }) => 
   };
 
   try {
+    // If Brevo API key is configured, use HTTP API (more reliable from cloud hosts)
+    if (process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY) {
+      try {
+        await sendViaBrevo(email, mailOptions.subject, mailOptions.html);
+        return;
+      } catch (brevoErr) {
+        console.error('Brevo API send failed, falling back to SMTP if available:', brevoErr && brevoErr.message ? brevoErr.message : brevoErr);
+        // continue to SMTP path
+      }
+    }
     // Prefer SMTP when configured
     const transporter = await getTransporter();
     if (transporter) {
