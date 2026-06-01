@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import Writer from '../models/Writer.js';
 import User from '../models/User.js';
-import { upload } from '../middleware/upload.js';
+import { uploadImage, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
 
@@ -25,12 +25,12 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
+router.post('/', uploadImage.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
   try {
     const { name, genre, bio, featured, email, password } = req.body;
     
-    const avatar = req.files['avatar'] ? `/uploads/${req.files['avatar'][0].filename}` : '';
-    const profileMusic = req.files['music'] ? `/uploads/${req.files['music'][0].filename}` : '';
+    const avatar = req.files?.['avatar'] ? req.files['avatar'][0].path : '';
+    const profileMusic = req.files?.['music'] ? req.files['music'][0].path : '';
     
     const writer = await Writer.create({
       name,
@@ -60,19 +60,30 @@ router.post('/', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music'
   }
 });
 
-router.put('/:id', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
+router.put('/:id', uploadImage.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
   try {
     const { name, genre, bio, featured, email, password } = req.body;
+    const writer = await Writer.findById(req.params.id);
+    if (!writer) return res.status(404).json({ error: 'Writer not found' });
+    
     const updateData = { name, genre, bio, featured: featured === 'true', email };
     
-    if (req.files['avatar']) {
-      updateData.avatar = `/uploads/${req.files['avatar'][0].filename}`;
+    if (req.files?.['avatar']) {
+      // Delete old avatar from Cloudinary if exists
+      if (writer.avatar) {
+        await deleteCloudinaryFile(writer.avatar);
+      }
+      updateData.avatar = req.files['avatar'][0].path;
     }
-    if (req.files['music']) {
-      updateData.profileMusic = `/uploads/${req.files['music'][0].filename}`;
+    if (req.files?.['music']) {
+      // Delete old music from Cloudinary if exists
+      if (writer.profileMusic) {
+        await deleteCloudinaryFile(writer.profileMusic);
+      }
+      updateData.profileMusic = req.files['music'][0].path;
     }
     
-    const writer = await Writer.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const updatedWriter = await Writer.findByIdAndUpdate(req.params.id, updateData, { new: true });
     
     // Update or Create Admin User
     if (email) {
@@ -87,7 +98,7 @@ router.put('/:id', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'musi
         });
       }
     }
-    res.json(writer);
+    res.json(updatedWriter);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -95,6 +106,17 @@ router.put('/:id', upload.fields([{ name: 'avatar', maxCount: 1 }, { name: 'musi
 
 router.delete('/:id', async (req, res) => {
   try {
+    const writer = await Writer.findById(req.params.id);
+    if (!writer) return res.status(404).json({ error: 'Writer not found' });
+    
+    // Delete avatar and music from Cloudinary
+    if (writer.avatar) {
+      await deleteCloudinaryFile(writer.avatar);
+    }
+    if (writer.profileMusic) {
+      await deleteCloudinaryFile(writer.profileMusic);
+    }
+    
     await Writer.findByIdAndDelete(req.params.id);
     res.status(204).end();
   } catch (err) {

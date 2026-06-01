@@ -1,6 +1,6 @@
 import express from 'express';
 import Book from '../models/Book.js';
-import { upload } from '../middleware/upload.js';
+import { uploadImage, uploadPDF, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
 
@@ -31,11 +31,11 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', upload.single('coverImage'), async (req, res) => {
+router.post('/', uploadImage.single('coverImage'), async (req, res) => {
   try {
     const { title, description, author, writerId, genre, views, rating, status, season, featured, trend, uploadedBy } = req.body;
     let cover = '';
-    if (req.file) cover = `/uploads/${req.file.filename}`;
+    if (req.file) cover = req.file.path; // Cloudinary URL
     
     let resolvedAuthor = author;
     if (!resolvedAuthor && writerId) {
@@ -73,17 +73,27 @@ router.post('/', upload.single('coverImage'), async (req, res) => {
   }
 });
 
-router.put('/:id', upload.single('coverImage'), async (req, res) => {
+router.put('/:id', uploadImage.single('coverImage'), async (req, res) => {
   try {
     const { title, description, author, writerId, genre, views, rating, status, season, featured, trend } = req.body;
+    const book = await Book.findById(req.params.id);
+    
     let updateData = {
       title, description, author, genre, reads: Number(views) || 0, rating: Number(rating) || 0, status, seasonNumber: Number(season) || 1, trend, featured: featured === 'true'
     };
-    if (writerId) updateData.writerId = writerId;
-    if (req.file) updateData.cover = `/uploads/${req.file.filename}`;
     
-    const book = await Book.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    res.json(book);
+    if (writerId) updateData.writerId = writerId;
+    
+    if (req.file) {
+      // Delete old cover from Cloudinary if exists
+      if (book.cover) {
+        await deleteCloudinaryFile(book.cover);
+      }
+      updateData.cover = req.file.path; // New Cloudinary URL
+    }
+    
+    const updatedBook = await Book.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    res.json(updatedBook);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -91,6 +101,23 @@ router.put('/:id', upload.single('coverImage'), async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
+    const book = await Book.findById(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+    
+    // Delete book cover from Cloudinary
+    if (book.cover) {
+      await deleteCloudinaryFile(book.cover);
+    }
+    
+    // Delete all chapter PDFs
+    if (book.chapters && book.chapters.length > 0) {
+      for (const chapter of book.chapters) {
+        if (chapter.pdfUrl) {
+          await deleteCloudinaryFile(chapter.pdfUrl);
+        }
+      }
+    }
+    
     await Book.findByIdAndDelete(req.params.id);
     res.status(204).end();
   } catch (err) {
@@ -99,11 +126,11 @@ router.delete('/:id', async (req, res) => {
 });
 
 // --- CHAPTERS ---
-router.post('/:id/chapters', upload.single('pdfFile'), async (req, res) => {
+router.post('/:id/chapters', uploadPDF.single('pdfFile'), async (req, res) => {
   try {
     const { title, type, order } = req.body;
     let pdfUrl = '';
-    if (req.file) pdfUrl = `/uploads/${req.file.filename}`;
+    if (req.file) pdfUrl = req.file.path; // Cloudinary URL
     
     const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Book not found' });
@@ -132,6 +159,13 @@ router.delete('/:id/chapters/:chapId', async (req, res) => {
   try {
     const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Book not found' });
+    
+    const chapter = book.chapters.id(req.params.chapId);
+    if (chapter && chapter.pdfUrl) {
+      // Delete PDF from Cloudinary
+      await deleteCloudinaryFile(chapter.pdfUrl);
+    }
+    
     book.chapters.pull(req.params.chapId);
     await book.save();
     res.json(book);

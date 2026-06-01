@@ -2,7 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Book from '../models/Book.js';
-import { upload } from '../middleware/upload.js';
+import { uploadImage, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
 
@@ -111,11 +111,18 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // POST /api/profile/avatar — Upload profile picture
-router.post('/avatar', authMiddleware, upload.single('avatar'), async (req, res) => {
+router.post('/avatar', authMiddleware, uploadImage.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
-    const avatarUrl = `/uploads/${req.file.filename}`;
+    const user = await User.findById(req.user._id);
+    
+    // Delete old avatar from Cloudinary if exists
+    if (user.avatar) {
+      await deleteCloudinaryFile(user.avatar);
+    }
+    
+    const avatarUrl = req.file.path; // Cloudinary URL
     await User.findByIdAndUpdate(req.user._id, { avatar: avatarUrl });
     
     res.json({ avatar: avatarUrl });

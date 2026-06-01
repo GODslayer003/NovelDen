@@ -1,6 +1,6 @@
 import express from 'express';
 import News from '../models/News.js';
-import { upload } from '../middleware/upload.js';
+import { uploadImage, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
 
@@ -13,14 +13,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', upload.single('media'), async (req, res) => {
+router.post('/', uploadImage.single('media'), async (req, res) => {
   try {
     const { writerId, title, content } = req.body;
     let mediaUrl = '';
     let mediaType = 'none';
     
     if (req.file) {
-      mediaUrl = `/uploads/${req.file.filename}`;
+      mediaUrl = req.file.path; // Cloudinary URL
       const mime = req.file.mimetype;
       if (mime.startsWith('image/')) mediaType = 'image';
       else if (mime.startsWith('video/')) mediaType = 'video';
@@ -44,6 +44,14 @@ router.post('/', upload.single('media'), async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
+    const news = await News.findById(req.params.id);
+    if (!news) return res.status(404).json({ error: 'News not found' });
+    
+    // Delete media from Cloudinary if exists
+    if (news.mediaUrl) {
+      await deleteCloudinaryFile(news.mediaUrl);
+    }
+    
     await News.findByIdAndDelete(req.params.id);
     res.status(204).end();
   } catch (err) {
