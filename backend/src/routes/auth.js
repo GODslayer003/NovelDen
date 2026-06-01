@@ -129,23 +129,25 @@ const sendOtpEmail = async (email, otp, options = { ensureDelivery: false }) => 
         <div style="text-align: center; margin-bottom: 30px;">
           <h1 style="color: #d4a574; font-size: 28px; margin: 0;">Novel Den</h1>
           <p style="color: #9a7a6a; font-size: 12px; letter-spacing: 3px; margin-top: 4px;">EMAIL VERIFICATION</p>
-        </div>
-        <div style="text-align: center; padding: 24px; background: #2C1810; border-radius: 12px; border: 1px solid #3d2314;">
-          <p style="color: #F5E6D3; font-size: 14px; margin: 0 0 16px;">Your verification code is:</p>
-          <div style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #d4a574; font-family: monospace;">${otp}</div>
-          <p style="color: #9a7a6a; font-size: 11px; margin-top: 16px;">This code expires in <strong>10 minutes</strong></p>
-        </div>
-        <p style="color: #6b5a4e; font-size: 11px; text-align: center; margin-top: 24px;">If you didn't request this, you can safely ignore this email.</p>
-      </div>
-    `
-  };
-  try {
-    // If user explicitly prefers SendGrid but none is available, continue to SMTP path
-    if (process.env.SENDGRID_API_KEY && process.env.PREFER_SENDGRID === 'true') {
-      try {
-        sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-        const msg = {
-          to: email,
+        (async () => {
+          try {
+            const transporter = cachedTransporter || (await getTransporter());
+            if (!transporter) return console.warn('No SMTP configured for background send');
+            // Re-verify before attempting background sends
+            if (!smtpHealthy) await verifyTransporter(transporter, 2);
+            if (!smtpHealthy) return console.warn('SMTP not healthy; background send aborted');
+            const mailOptions = {
+              from: `"Novel Den" <${process.env.SMTP_EMAIL}>`,
+              to: email,
+              subject: '🔐 Novel Den — Verify Your Email',
+              html: `Your verification code is: <strong>${otp}</strong>`,
+            };
+            await sendMailWithRetries(transporter, mailOptions);
+            console.log(`✅ Background OTP sent to ${email}`);
+          } catch (err) {
+            console.error('Background send failed:', err && err.message ? err.message : err);
+          }
+        })();
           from: process.env.SENDGRID_FROM || process.env.SMTP_EMAIL || 'no-reply@novelden.app',
           subject: mailOptions.subject,
           html: mailOptions.html,
