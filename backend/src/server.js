@@ -33,7 +33,13 @@ app.use(helmet({
 }))
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:4000', 'http://localhost:5173'],
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:4000', 
+    'http://localhost:5173',
+    'https://novelden.vercel.app',
+    'https://adminnovelden.vercel.app'
+  ],
   credentials: true
 }))
 
