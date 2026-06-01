@@ -8,14 +8,14 @@ export default function NewsCard({ news }) {
   return (
     <div className="bg-espresso/60 border border-coffee-800 rounded-2xl overflow-hidden hover:border-yellow-600/50 transition-colors">
       {mediaUrl && mediaType === 'image' && (
-        <img src={`${STATIC_URL}${mediaUrl}`} alt={title} className="w-full h-64 object-cover" />
+        <img src={(mediaUrl || '').startsWith('http') ? mediaUrl : `${STATIC_URL}${mediaUrl}`} alt={title} className="w-full h-64 object-cover" />
       )}
       {mediaUrl && mediaType === 'video' && (
-        <video src={`${STATIC_URL}${mediaUrl}`} controls className="w-full max-h-64 object-cover bg-black" />
+        <video src={(mediaUrl || '').startsWith('http') ? mediaUrl : `${STATIC_URL}${mediaUrl}`} controls className="w-full max-h-64 object-cover bg-black" />
       )}
       {mediaUrl && mediaType === 'music' && (
         <div className="p-4 bg-black/40">
-          <audio src={`${STATIC_URL}${mediaUrl}`} controls className="w-full" />
+          <audio src={(mediaUrl || '').startsWith('http') ? mediaUrl : `${STATIC_URL}${mediaUrl}`} controls className="w-full" />
         </div>
       )}
       <div className="p-6">
@@ -24,8 +24,8 @@ export default function NewsCard({ news }) {
         <div className="flex items-center gap-3 mb-4">
           <Link to={`/writer/${writerId?._id}`} className="flex items-center gap-2 group">
             <div className="w-8 h-8 rounded-full overflow-hidden bg-coffee-800">
-              {writerId?.avatarUrl ? (
-                <img src={`${STATIC_URL}${writerId.avatarUrl}`} alt="" className="w-full h-full object-cover" />
+              {((writerId?.avatar || writerId?.avatarUrl) || '') ? (
+                <img src={((writerId.avatar || writerId.avatarUrl).startsWith('http') ? (writerId.avatar || writerId.avatarUrl) : `${STATIC_URL}${writerId.avatar || writerId.avatarUrl}`)} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center font-bold">{writerId?.name?.[0] || '?'}</div>
               )}

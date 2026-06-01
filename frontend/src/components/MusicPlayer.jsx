@@ -21,7 +21,7 @@ export default function MusicPlayer({ musicUrl }) {
 
   return (
     <div className="bg-espresso/80 backdrop-blur border border-coffee-800 p-4 rounded-xl flex items-center gap-4 w-full max-w-sm">
-      <audio ref={audioRef} src={`${STATIC_URL}${musicUrl}`} loop />
+      <audio ref={audioRef} src={(musicUrl || '').startsWith('http') ? musicUrl : `${STATIC_URL}${musicUrl}`} loop />
       <button 
         onClick={() => {
           if (isPlaying) {

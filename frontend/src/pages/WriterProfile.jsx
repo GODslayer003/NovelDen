@@ -26,9 +26,9 @@ export default function WriterProfile() {
     <div className="min-h-screen bg-[#1a0f00] pb-20 relative overflow-hidden">
       {/* Absolute Cinema Background */}
       <div className="absolute inset-0 z-0 h-[80vh]">
-        <img 
-          src={writer.avatar ? `${STATIC_URL}${writer.avatar}` : 'https://i.pinimg.com/originals/46/96/88/469688385704ca1acde40f62c3edd322.gif'} 
-          alt="bg" 
+        <img
+          src={(writer.avatar || writer.avatarUrl) ? ((writer.avatar || writer.avatarUrl).startsWith('http') ? (writer.avatar || writer.avatarUrl) : `${STATIC_URL}${writer.avatar || writer.avatarUrl}`) : 'https://i.pinimg.com/originals/46/96/88/469688385704ca1acde40f62c3edd322.gif'}
+          alt="bg"
           className="w-full h-full object-cover opacity-20 blur-sm scale-110"
         />
         <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(26,15,0,0.5) 0%, rgba(26,15,0,0.9) 60%, rgba(26,15,0,1) 100%)' }} />
@@ -37,8 +37,8 @@ export default function WriterProfile() {
       <div className="relative z-10 max-w-7xl mx-auto px-6 pt-32">
         <div className="flex flex-col md:flex-row gap-12 items-center md:items-start mb-20">
           <div className="w-48 h-48 md:w-64 md:h-64 flex-shrink-0 rounded-full overflow-hidden border-4 border-yellow-600/30 shadow-[0_0_50px_rgba(212,165,116,0.3)] bg-coffee-950">
-            {writer.avatar ? (
-              <img src={`${STATIC_URL}${writer.avatar}`} alt={writer.name} className="w-full h-full object-cover" />
+            { (writer.avatar || writer.avatarUrl) ? (
+              <img src={(writer.avatar || writer.avatarUrl).startsWith('http') ? (writer.avatar || writer.avatarUrl) : `${STATIC_URL}${writer.avatar || writer.avatarUrl}`} alt={writer.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center font-bold text-6xl text-yellow-600">{writer.name[0]}</div>
             )}

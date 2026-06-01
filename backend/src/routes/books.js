@@ -35,7 +35,11 @@ router.post('/', uploadImage.single('coverImage'), async (req, res) => {
   try {
     const { title, description, author, writerId, genre, views, rating, status, season, featured, trend, uploadedBy } = req.body;
     let cover = '';
-    if (req.file) cover = req.file.path; // Cloudinary URL
+    let coverImage = '';
+    if (req.file) {
+      cover = req.file.path; // Cloudinary URL
+      coverImage = req.file.path; // keep legacy field for admin panel
+    }
     
     let resolvedAuthor = author;
     if (!resolvedAuthor && writerId) {
@@ -62,6 +66,7 @@ router.post('/', uploadImage.single('coverImage'), async (req, res) => {
       featured: featured === 'true',
       trend: trend || 'None',
       cover,
+      coverImage,
       chapters: [],
       reviews: [],
       comments: []
@@ -85,11 +90,15 @@ router.put('/:id', uploadImage.single('coverImage'), async (req, res) => {
     if (writerId) updateData.writerId = writerId;
     
     if (req.file) {
-      // Delete old cover from Cloudinary if exists
+      // Delete old cover(s) from Cloudinary if exists
       if (book.cover) {
         await deleteCloudinaryFile(book.cover);
       }
+      if (book.coverImage && book.coverImage !== book.cover) {
+        await deleteCloudinaryFile(book.coverImage);
+      }
       updateData.cover = req.file.path; // New Cloudinary URL
+      updateData.coverImage = req.file.path; // legacy field
     }
     
     const updatedBook = await Book.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -104,9 +113,12 @@ router.delete('/:id', async (req, res) => {
     const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Book not found' });
     
-    // Delete book cover from Cloudinary
+    // Delete book cover(s) from Cloudinary
     if (book.cover) {
       await deleteCloudinaryFile(book.cover);
+    }
+    if (book.coverImage && book.coverImage !== book.cover) {
+      await deleteCloudinaryFile(book.coverImage);
     }
     
     // Delete all chapter PDFs

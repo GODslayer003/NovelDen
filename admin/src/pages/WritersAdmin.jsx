@@ -131,8 +131,12 @@ export default function WritersAdmin() {
               {writers.map(w => (
                 <div key={w._id} className="rounded-2xl p-5 flex items-center gap-4 bg-espresso/60 border border-coffee-800">
                   <div className="w-16 h-16 rounded-full overflow-hidden bg-coffee-900 flex-shrink-0">
-                    {w.avatarUrl ? (
-                      <img src={`${import.meta.env.VITE_STATIC_URL}${w.avatarUrl}`} alt="" className="w-full h-full object-cover" />
+                    {(w.avatar || w.avatarUrl) ? (
+                      <img
+                        src={(w.avatar || w.avatarUrl).startsWith('http') ? (w.avatar || w.avatarUrl) : `${import.meta.env.VITE_STATIC_URL}${w.avatar || w.avatarUrl}`}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center font-bold text-xl">{w.name[0]}</div>
                     )}

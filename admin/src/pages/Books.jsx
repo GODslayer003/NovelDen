@@ -211,7 +211,13 @@ export default function Books() {
               {filtered.map(b => (
                 <tr key={b._id} className="hover:bg-coffee-900/10">
                   <td className="px-5 py-3">
-                    {b.coverImage && <img src={`${STATIC_URL}${b.coverImage}`} alt="" className="w-10 h-14 object-cover rounded-lg border border-coffee-800" />}
+                    {(b.coverImage || b.cover) && (
+                      <img
+                        src={((b.coverImage || b.cover).startsWith('http')) ? (b.coverImage || b.cover) : `${STATIC_URL}${b.coverImage || b.cover}`}
+                        alt=""
+                        className="w-10 h-14 object-cover rounded-lg border border-coffee-800"
+                      />
+                    )}
                   </td>
                   <td className="px-5 py-3 font-semibold text-coffee-100">{b.title} {b.featured && '⭐'}</td>
                   <td className="px-5 py-3 text-coffee-300">{b.writerId ? b.writerId.name : b.author}</td>
@@ -363,7 +369,7 @@ export default function Books() {
                       <span className="text-[10px] text-yellow-600 ml-2 uppercase border border-yellow-600/30 px-2 py-0.5 rounded">{c.type}</span>
                       <h5 className="text-sm font-semibold text-coffee-100 mt-1">{c.title}</h5>
                     </div>
-                    <a href={`${STATIC_URL}${c.pdfUrl}`} target="_blank" rel="noreferrer" className="text-xs text-yellow-600 hover:underline">View PDF</a>
+                    <a href={(c.pdfUrl || '').startsWith('http') ? c.pdfUrl : `${STATIC_URL}${c.pdfUrl}`} target="_blank" rel="noreferrer" className="text-xs text-yellow-600 hover:underline">View PDF</a>
                   </div>
                 ))}
               </div>

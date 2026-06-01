@@ -138,8 +138,8 @@ export default function NewsAdmin() {
             news.map(item => (
               <div key={item._id} className="bg-espresso/40 p-5 rounded-2xl border border-coffee-800 flex gap-4">
                 <div className="w-12 h-12 rounded-full bg-coffee-800 overflow-hidden flex-shrink-0">
-                  {item.writerId?.avatarUrl ? (
-                    <img src={`${import.meta.env.VITE_STATIC_URL}${item.writerId.avatarUrl}`} alt="" className="w-full h-full object-cover" />
+                  {(item.writerId?.avatar || item.writerId?.avatarUrl) ? (
+                    <img src={(item.writerId.avatar || item.writerId.avatarUrl).startsWith('http') ? (item.writerId.avatar || item.writerId.avatarUrl) : `${import.meta.env.VITE_STATIC_URL}${item.writerId.avatar || item.writerId.avatarUrl}`} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xl">✍️</div>
                   )}
@@ -155,13 +155,13 @@ export default function NewsAdmin() {
                   <p className="text-sm text-coffee-200 mb-3 whitespace-pre-wrap">{item.content}</p>
                   
                   {item.mediaUrl && item.mediaType === 'image' && (
-                    <img src={`${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} alt="Attached" className="max-h-48 rounded-lg" />
+                    <img src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} alt="Attached" className="max-h-48 rounded-lg" />
                   )}
                   {item.mediaUrl && item.mediaType === 'video' && (
-                    <video src={`${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} controls className="max-h-48 rounded-lg" />
+                    <video src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} controls className="max-h-48 rounded-lg" />
                   )}
                   {item.mediaUrl && item.mediaType === 'music' && (
-                    <audio src={`${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} controls className="w-full" />
+                    <audio src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} controls className="w-full" />
                   )}
                 </div>
               </div>

@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
-    const news = await News.find().populate('writerId', 'name avatarUrl').sort({ createdAt: -1 });
+    const news = await News.find().populate('writerId', 'name avatar').sort({ createdAt: -1 });
     res.json(news);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -35,7 +35,7 @@ router.post('/', uploadImage.single('media'), async (req, res) => {
       mediaType
     });
     
-    const populatedNews = await news.populate('writerId', 'name avatarUrl');
+    const populatedNews = await news.populate('writerId', 'name avatar');
     res.status(201).json(populatedNews);
   } catch (err) {
     res.status(500).json({ error: err.message });
