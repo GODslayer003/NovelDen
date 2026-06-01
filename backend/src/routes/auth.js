@@ -21,13 +21,33 @@ config({ path: path.join(__dirname, '../../.env') });
 // Create SMTP transporter if SMTP settings are provided
 const getTransporter = () => {
   if (process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD) {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASSWORD
-      }
-    });
+    // Allow custom SMTP host/port/secure via env, default to Gmail service
+    const hasHost = !!process.env.SMTP_HOST;
+    const transportOptions = hasHost
+      ? {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587,
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: {
+            user: process.env.SMTP_EMAIL,
+            pass: process.env.SMTP_PASSWORD,
+          },
+          connectionTimeout: process.env.SMTP_CONNECTION_TIMEOUT ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) : 8000,
+          greetingTimeout: process.env.SMTP_GREETING_TIMEOUT ? parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) : 5000,
+          socketTimeout: process.env.SMTP_SOCKET_TIMEOUT ? parseInt(process.env.SMTP_SOCKET_TIMEOUT, 10) : 8000,
+        }
+      : {
+          service: 'gmail',
+          auth: {
+            user: process.env.SMTP_EMAIL,
+            pass: process.env.SMTP_PASSWORD,
+          },
+          connectionTimeout: process.env.SMTP_CONNECTION_TIMEOUT ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) : 8000,
+          greetingTimeout: process.env.SMTP_GREETING_TIMEOUT ? parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) : 5000,
+          socketTimeout: process.env.SMTP_SOCKET_TIMEOUT ? parseInt(process.env.SMTP_SOCKET_TIMEOUT, 10) : 8000,
+        };
+
+    return nodemailer.createTransport(transportOptions);
   }
   return null;
 };
@@ -60,8 +80,32 @@ const sendOtpEmail = async (email, otp) => {
     // Prefer SMTP when configured
     const transporter = getTransporter();
     if (transporter) {
-      await transporter.sendMail(mailOptions);
-      return;
+      try {
+        await transporter.sendMail(mailOptions);
+        return;
+      } catch (smtpErr) {
+        console.error(`⚠️ SMTP send failed for ${email}:`, smtpErr && smtpErr.message ? smtpErr.message : smtpErr);
+        // If SendGrid is configured, attempt fallback
+        if (process.env.SENDGRID_API_KEY) {
+          console.log('➡️ Falling back to SendGrid due to SMTP failure');
+          try {
+            sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+            const msg = {
+              to: email,
+              from: process.env.SENDGRID_FROM || process.env.SMTP_EMAIL || 'no-reply@novelden.app',
+              subject: mailOptions.subject,
+              html: mailOptions.html,
+            };
+            await sgMail.send(msg);
+            return;
+          } catch (sgErr) {
+            console.error(`⚠️ SendGrid fallback also failed for ${email}:`, sgErr && sgErr.message ? sgErr.message : sgErr);
+            throw sgErr;
+          }
+        }
+        // No SendGrid configured — rethrow original SMTP error
+        throw smtpErr;
+      }
     }
 
     // Fallback to SendGrid if API key present
