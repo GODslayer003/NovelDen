@@ -35,7 +35,7 @@ const resolveIPv4 = async (host) => {
 };
 
 const getTransporter = async () => {
-  if (process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD) {
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     // Allow custom SMTP host/port/secure via env, default to Gmail service
     const hasHost = !!process.env.SMTP_HOST;
     if (hasHost) {
@@ -45,8 +45,8 @@ const getTransporter = async () => {
         port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587,
         secure: process.env.SMTP_SECURE === 'true',
         auth: {
-          user: process.env.SMTP_EMAIL,
-          pass: process.env.SMTP_PASSWORD,
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
         },
         connectionTimeout: process.env.SMTP_CONNECTION_TIMEOUT ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) : 8000,
         greetingTimeout: process.env.SMTP_GREETING_TIMEOUT ? parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) : 5000,
@@ -61,8 +61,8 @@ const getTransporter = async () => {
     return nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASSWORD,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
       },
       connectionTimeout: process.env.SMTP_CONNECTION_TIMEOUT ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) : 8000,
       greetingTimeout: process.env.SMTP_GREETING_TIMEOUT ? parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) : 5000,
@@ -106,7 +106,7 @@ const scheduleBackgroundSend = (email, otp) => {
       const transporter = await getTransporter();
       if (!transporter) return console.warn('No SMTP configured for background send');
       const mailOptions = {
-        from: `"Novel Den" <${process.env.SMTP_EMAIL}>`,
+        from: process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@novelden.app',
         to: email,
         subject: '🔐 Novel Den — Verify Your Email',
         html: `...OTP: ${otp}`,
@@ -121,7 +121,7 @@ const scheduleBackgroundSend = (email, otp) => {
 
 const sendOtpEmail = async (email, otp, options = { ensureDelivery: false }) => {
   const mailOptions = {
-    from: `"Novel Den" <${process.env.SMTP_EMAIL}>`,
+    from: process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@novelden.app',
     to: email,
     subject: '🔐 Novel Den — Verify Your Email',
     html: `
@@ -170,7 +170,7 @@ const sendOtpEmail = async (email, otp, options = { ensureDelivery: false }) => 
       sgMail.setApiKey(process.env.SENDGRID_API_KEY);
       const msg = {
         to: email,
-        from: process.env.SENDGRID_FROM || process.env.SMTP_EMAIL || 'no-reply@novelden.app',
+        from: process.env.SENDGRID_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@novelden.app',
         subject: mailOptions.subject,
         html: mailOptions.html,
       };
