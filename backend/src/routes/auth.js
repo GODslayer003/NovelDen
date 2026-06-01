@@ -1,9 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import nodemailer from 'nodemailer';
-// Using Brevo HTTP API for production email delivery; no DNS or raw SMTP resolution required
-import sgMail from '@sendgrid/mail';
+// Using Brevo HTTP API for production email delivery; no raw SMTP required
 import User from '../models/User.js';
 import Otp from '../models/Otp.js';
 
@@ -16,11 +14,24 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Load backend .env (backend/.env) so SMTP and other secrets are available
+// Load backend .env (backend/.env) so secrets are available
 config({ path: path.join(__dirname, '../../.env') });
 
-// In production we use Brevo HTTP API; SMTP/DNS resolution is intentionally not used.
-const getTransporter = async () => null;
+// Enforce critical env vars in production
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET) {
+    console.error('FATAL: JWT_SECRET is required in production. Add it to your environment variables.');
+    process.exit(1);
+  }
+  if (!process.env.BREVO_API_KEY && !process.env.SENDINBLUE_API_KEY) {
+    console.error('FATAL: BREVO_API_KEY (or SENDINBLUE_API_KEY) is required in production for sending emails.');
+    process.exit(1);
+  }
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_fallback_secret';
+const SUPERADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || '';
+const SUPERADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || '';
 
 // Generate 6-digit OTP
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -41,6 +52,10 @@ const sendViaBrevo = async (toEmail, subject, htmlContent) => {
     htmlContent: htmlContent,
   };
 
+  const controller = new AbortController();
+  const timeoutMs = process.env.BREVO_API_TIMEOUT_MS ? parseInt(process.env.BREVO_API_TIMEOUT_MS, 10) : 10000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -48,9 +63,10 @@ const sendViaBrevo = async (toEmail, subject, htmlContent) => {
       'api-key': apiKey,
     },
     body: JSON.stringify(payload),
+    signal: controller.signal,
     // small timeout can be implemented by AbortController if needed
   });
-
+  clearTimeout(timeout);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Brevo API error ${res.status}: ${text}`);
@@ -102,13 +118,27 @@ const sendOtpEmail = async (email, otp, options = { ensureDelivery: false }) => 
 // ── REGISTER (Step 1: Create unverified user + send OTP) ──
 // ── EMAIL HEALTH CHECK ──
 router.get('/health/email', async (req, res) => {
-  // Health: verify Brevo API key presence (we use Brevo HTTP API in production)
+  // Health: verify Brevo API key works by calling Brevo account endpoint
   try {
     const apiKey = process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY;
     if (!apiKey) return res.status(503).json({ ok: false, reason: 'no_brevo_api_key' });
+
+    const controller = new AbortController();
+    const timeoutMs = process.env.BREVO_API_TIMEOUT_MS ? parseInt(process.env.BREVO_API_TIMEOUT_MS, 10) : 5000;
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    const r = await fetch('https://api.brevo.com/v3/account', {
+      method: 'GET',
+      headers: { 'api-key': apiKey },
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      return res.status(503).json({ ok: false, error: `brevo_api_error_${r.status}`, detail: text });
+    }
     return res.json({ ok: true, provider: 'brevo-api', from: process.env.EMAIL_FROM || process.env.SMTP_USER });
   } catch (err) {
-    return res.status(503).json({ ok: false, error: err.message || err });
+    return res.status(503).json({ ok: false, error: err.message || String(err) });
   }
 });
 
@@ -175,7 +205,7 @@ router.post('/verify-otp', async (req, res) => {
     // Generate JWT
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET || 'fallback_secret',
+      JWT_SECRET,
       { expiresIn: '1d' }
     );
     
@@ -213,13 +243,11 @@ router.post('/login', async (req, res) => {
     let user = await User.findOne({ email });
     
     // HARDCODED SUPERADMIN ASSIGNMENT
-    if (email === 'rohan@novelden.com' && password === 'NovelDen00327!25!') {
+    if (SUPERADMIN_EMAIL && SUPERADMIN_PASSWORD && email === SUPERADMIN_EMAIL && password === SUPERADMIN_PASSWORD) {
       if (!user) {
-        // Create superadmin account if it doesn't exist
         const hashedPassword = await bcrypt.hash(password, 10);
-        user = await User.create({ name: 'Rohan', email, password: hashedPassword, role: 'superadmin', isVerified: true });
+        user = await User.create({ name: 'Superadmin', email, password: hashedPassword, role: 'superadmin', isVerified: true });
       } else {
-        // Ensure they have the superadmin role and are verified
         user.role = 'superadmin';
         user.isVerified = true;
         await user.save();
@@ -245,7 +273,7 @@ router.post('/login', async (req, res) => {
     
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET || 'fallback_secret',
+      JWT_SECRET,
       { expiresIn: '1d' }
     );
     
