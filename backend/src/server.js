@@ -3,6 +3,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import { config } from 'dotenv'
+import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import mongoose from 'mongoose'
@@ -14,7 +15,17 @@ import usersRouter   from './routes/users.js'
 import profileRouter from './routes/profile.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-config({ path: path.join(__dirname, '../../.env') })
+// Load dotenv from backend/.env if present, otherwise fallback to workspace root .env
+const backendEnv = path.join(__dirname, '../../.env')
+const workspaceEnv = path.join(__dirname, '../../../.env')
+if (fs.existsSync(backendEnv)) {
+  config({ path: backendEnv })
+} else if (fs.existsSync(workspaceEnv)) {
+  config({ path: workspaceEnv })
+} else {
+  // fallback to default dotenv behavior (NODE dotenv will look at process.env already)
+  config()
+}
 
 const app  = express()
 const PORT = process.env.PORT || 5000

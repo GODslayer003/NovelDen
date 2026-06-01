@@ -10,12 +10,21 @@ const router = express.Router();
 // ── Email Transporter (Gmail App Password) ──
 import { config } from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Load backend .env (backend/.env) so secrets are available
-config({ path: path.join(__dirname, '../../.env') });
+// Load dotenv from backend/.env if present, otherwise fallback to workspace root .env
+const backendEnv = path.join(__dirname, '../../.env')
+const workspaceEnv = path.join(__dirname, '../../../.env')
+if (fs.existsSync(backendEnv)) {
+  config({ path: backendEnv })
+} else if (fs.existsSync(workspaceEnv)) {
+  config({ path: workspaceEnv })
+} else {
+  config()
+}
 
 // Enforce critical env vars in production
 if (process.env.NODE_ENV === 'production') {
