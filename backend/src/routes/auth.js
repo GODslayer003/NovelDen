@@ -192,6 +192,22 @@ const sendOtpEmail = async (email, otp, options = { ensureDelivery: false }) => 
 };
 
 // ── REGISTER (Step 1: Create unverified user + send OTP) ──
+// ── EMAIL HEALTH CHECK ──
+router.get('/health/email', async (req, res) => {
+  try {
+    const transporter = await getTransporter();
+    if (!transporter) return res.status(503).json({ ok: false, reason: 'no_smtp_configured' });
+    const timeout = process.env.SMTP_VERIFY_TIMEOUT_MS ? parseInt(process.env.SMTP_VERIFY_TIMEOUT_MS, 10) : 5000;
+    await Promise.race([
+      transporter.verify(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP verify timed out')), timeout)),
+    ]);
+    return res.json({ ok: true, provider: 'smtp', from: process.env.EMAIL_FROM || process.env.SMTP_USER });
+  } catch (err) {
+    return res.status(503).json({ ok: false, error: err.message || err });
+  }
+});
+
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
