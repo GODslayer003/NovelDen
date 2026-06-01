@@ -2,6 +2,8 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+import { promisify } from 'util';
 import sgMail from '@sendgrid/mail';
 import User from '../models/User.js';
 import Otp from '../models/Otp.js';
@@ -19,35 +21,55 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, '../../.env') });
 
 // Create SMTP transporter if SMTP settings are provided
-const getTransporter = () => {
+const dnsLookup = promisify(dns.lookup);
+
+// Resolve hostname to IPv4 address when possible to avoid IPv6 ENETUNREACH issues in some hosts
+const resolveIPv4 = async (host) => {
+  try {
+    const res = await dnsLookup(host, { family: 4 });
+    if (res && res.address) return res.address;
+  } catch (e) {
+    // ignore and return original host
+  }
+  return host;
+};
+
+const getTransporter = async () => {
   if (process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD) {
     // Allow custom SMTP host/port/secure via env, default to Gmail service
     const hasHost = !!process.env.SMTP_HOST;
-    const transportOptions = hasHost
-      ? {
-          host: process.env.SMTP_HOST,
-          port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587,
-          secure: process.env.SMTP_SECURE === 'true',
-          auth: {
-            user: process.env.SMTP_EMAIL,
-            pass: process.env.SMTP_PASSWORD,
-          },
-          connectionTimeout: process.env.SMTP_CONNECTION_TIMEOUT ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) : 8000,
-          greetingTimeout: process.env.SMTP_GREETING_TIMEOUT ? parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) : 5000,
-          socketTimeout: process.env.SMTP_SOCKET_TIMEOUT ? parseInt(process.env.SMTP_SOCKET_TIMEOUT, 10) : 8000,
-        }
-      : {
-          service: 'gmail',
-          auth: {
-            user: process.env.SMTP_EMAIL,
-            pass: process.env.SMTP_PASSWORD,
-          },
-          connectionTimeout: process.env.SMTP_CONNECTION_TIMEOUT ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) : 8000,
-          greetingTimeout: process.env.SMTP_GREETING_TIMEOUT ? parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) : 5000,
-          socketTimeout: process.env.SMTP_SOCKET_TIMEOUT ? parseInt(process.env.SMTP_SOCKET_TIMEOUT, 10) : 8000,
-        };
+    if (hasHost) {
+      const resolvedHost = await resolveIPv4(process.env.SMTP_HOST);
+      const transportOptions = {
+        host: resolvedHost,
+        port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587,
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+          user: process.env.SMTP_EMAIL,
+          pass: process.env.SMTP_PASSWORD,
+        },
+        connectionTimeout: process.env.SMTP_CONNECTION_TIMEOUT ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) : 8000,
+        greetingTimeout: process.env.SMTP_GREETING_TIMEOUT ? parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) : 5000,
+        socketTimeout: process.env.SMTP_SOCKET_TIMEOUT ? parseInt(process.env.SMTP_SOCKET_TIMEOUT, 10) : 8000,
+        pool: process.env.SMTP_POOL === 'true',
+        maxConnections: process.env.SMTP_MAX_CONNECTIONS ? parseInt(process.env.SMTP_MAX_CONNECTIONS, 10) : 5,
+      };
+      return nodemailer.createTransport(transportOptions);
+    }
 
-    return nodemailer.createTransport(transportOptions);
+    // Use service (like Gmail) which handles host resolution internally
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD,
+      },
+      connectionTimeout: process.env.SMTP_CONNECTION_TIMEOUT ? parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) : 8000,
+      greetingTimeout: process.env.SMTP_GREETING_TIMEOUT ? parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) : 5000,
+      socketTimeout: process.env.SMTP_SOCKET_TIMEOUT ? parseInt(process.env.SMTP_SOCKET_TIMEOUT, 10) : 8000,
+      pool: process.env.SMTP_POOL === 'true',
+      maxConnections: process.env.SMTP_MAX_CONNECTIONS ? parseInt(process.env.SMTP_MAX_CONNECTIONS, 10) : 5,
+    });
   }
   return null;
 };
@@ -56,7 +78,48 @@ const getTransporter = () => {
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 // Send OTP email
-const sendOtpEmail = async (email, otp) => {
+// Helper: perform SMTP send with retries and timeouts
+const sendMailWithRetries = async (transporter, mailOptions) => {
+  const maxRetries = process.env.SMTP_MAX_RETRIES ? parseInt(process.env.SMTP_MAX_RETRIES, 10) : 3;
+  const baseDelay = process.env.SMTP_RETRY_BASE_MS ? parseInt(process.env.SMTP_RETRY_BASE_MS, 10) : 800;
+  const attemptTimeout = process.env.SMTP_ATTEMPT_TIMEOUT_MS ? parseInt(process.env.SMTP_ATTEMPT_TIMEOUT_MS, 10) : 5000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const sendPromise = transporter.sendMail(mailOptions);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP attempt timed out')), attemptTimeout));
+      await Promise.race([sendPromise, timeoutPromise]);
+      return;
+    } catch (err) {
+      console.error(`SMTP attempt ${attempt} failed:`, err && err.message ? err.message : err);
+      if (attempt === maxRetries) throw err;
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+};
+
+const scheduleBackgroundSend = (email, otp) => {
+  // Attempt background retries without blocking the request
+  setTimeout(async () => {
+    try {
+      const transporter = await getTransporter();
+      if (!transporter) return console.warn('No SMTP configured for background send');
+      const mailOptions = {
+        from: `"Novel Den" <${process.env.SMTP_EMAIL}>`,
+        to: email,
+        subject: '🔐 Novel Den — Verify Your Email',
+        html: `...OTP: ${otp}`,
+      };
+      await sendMailWithRetries(transporter, mailOptions);
+      console.log(`✅ Background OTP sent to ${email}`);
+    } catch (err) {
+      console.error('Background send failed:', err && err.message ? err.message : err);
+    }
+  }, 1000);
+};
+
+const sendOtpEmail = async (email, otp, options = { ensureDelivery: false }) => {
   const mailOptions = {
     from: `"Novel Den" <${process.env.SMTP_EMAIL}>`,
     to: email,
@@ -77,34 +140,45 @@ const sendOtpEmail = async (email, otp) => {
     `
   };
   try {
-    // Prefer SMTP when configured
-    const transporter = getTransporter();
-    if (transporter) {
+    // If user explicitly prefers SendGrid but none is available, continue to SMTP path
+    if (process.env.SENDGRID_API_KEY && process.env.PREFER_SENDGRID === 'true') {
       try {
-        await transporter.sendMail(mailOptions);
+        sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+        const msg = {
+          to: email,
+          from: process.env.SENDGRID_FROM || process.env.SMTP_EMAIL || 'no-reply@novelden.app',
+          subject: mailOptions.subject,
+          html: mailOptions.html,
+        };
+        await sgMail.send(msg);
         return;
-      } catch (smtpErr) {
-        console.error(`⚠️ SMTP send failed for ${email}:`, smtpErr && smtpErr.message ? smtpErr.message : smtpErr);
-        // If SendGrid is configured, attempt fallback
-        if (process.env.SENDGRID_API_KEY) {
-          console.log('➡️ Falling back to SendGrid due to SMTP failure');
-          try {
-            sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-            const msg = {
-              to: email,
-              from: process.env.SENDGRID_FROM || process.env.SMTP_EMAIL || 'no-reply@novelden.app',
-              subject: mailOptions.subject,
-              html: mailOptions.html,
-            };
-            await sgMail.send(msg);
-            return;
-          } catch (sgErr) {
-            console.error(`⚠️ SendGrid fallback also failed for ${email}:`, sgErr && sgErr.message ? sgErr.message : sgErr);
-            throw sgErr;
-          }
-        }
-        // No SendGrid configured — rethrow original SMTP error
-        throw smtpErr;
+      } catch (sgErr) {
+        console.error('SendGrid preferred but send failed:', sgErr && sgErr.message ? sgErr.message : sgErr);
+        // fall through to SMTP if configured
+      }
+    }
+
+    // Prefer SMTP when configured
+    const transporter = await getTransporter();
+    if (transporter) {
+      // If ensureDelivery requested, block and throw on failure; otherwise attempt quick send and schedule background retries
+      if (options.ensureDelivery || process.env.FORCE_SYNC_EMAIL === 'true') {
+        await sendMailWithRetries(transporter, mailOptions);
+        return;
+      }
+
+      // Quick attempt with short timeout, otherwise schedule background retries and return success to client
+      const quickAttemptTimeout = process.env.SMTP_QUICK_ATTEMPT_MS ? parseInt(process.env.SMTP_QUICK_ATTEMPT_MS, 10) : 2000;
+      try {
+        const sendPromise = transporter.sendMail(mailOptions);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('SMTP quick attempt timed out')), quickAttemptTimeout));
+        await Promise.race([sendPromise, timeoutPromise]);
+        return;
+      } catch (quickErr) {
+        console.error(`SMTP quick attempt failed for ${email}:`, quickErr && quickErr.message ? quickErr.message : quickErr);
+        // Schedule background retry attempts and return success to API consumer
+        scheduleBackgroundSend(email, otp);
+        return;
       }
     }
 
