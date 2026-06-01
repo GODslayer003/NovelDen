@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 import User from '../models/User.js';
 import Otp from '../models/Otp.js';
 
@@ -14,16 +15,21 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Re-read .env file dynamically so it works even without a server restart
+// Load backend .env (backend/.env) so SMTP and other secrets are available
+config({ path: path.join(__dirname, '../../.env') });
+
+// Create SMTP transporter if SMTP settings are provided
 const getTransporter = () => {
-  config({ path: path.join(__dirname, '../../../.env'), override: true });
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.SMTP_EMAIL,
-      pass: process.env.SMTP_PASSWORD
-    }
-  });
+  if (process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD
+      }
+    });
+  }
+  return null;
 };
 
 // Generate 6-digit OTP
@@ -51,11 +57,36 @@ const sendOtpEmail = async (email, otp) => {
     `
   };
   try {
+    // Prefer SMTP when configured
     const transporter = getTransporter();
-    await transporter.sendMail(mailOptions);
+    if (transporter) {
+      await transporter.sendMail(mailOptions);
+      return;
+    }
+
+    // Fallback to SendGrid if API key present
+    if (process.env.SENDGRID_API_KEY) {
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      const msg = {
+        to: email,
+        from: process.env.SENDGRID_FROM || process.env.SMTP_EMAIL || 'no-reply@novelden.app',
+        subject: mailOptions.subject,
+        html: mailOptions.html
+      };
+      await sgMail.send(msg);
+      return;
+    }
+
+    // If neither SMTP nor SendGrid is configured, throw
+    throw new Error('No email provider configured (SMTP or SENDGRID_API_KEY)');
   } catch (err) {
-    console.error(`⚠️ Failed to send OTP email to ${email}. SMTP not configured properly?`);
-    console.log(`🔑 DEVELOPMENT OTP for ${email}: ${otp}`);
+    console.error(`⚠️ Failed to send OTP email to ${email}:`, err.message || err);
+    // In non-production, print OTP to logs to assist testing
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`🔑 DEVELOPMENT OTP for ${email}: ${otp}`);
+    }
+    // Re-throw so caller can handle error or respond accordingly
+    throw err;
   }
 };
 
