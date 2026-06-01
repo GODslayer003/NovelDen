@@ -1,0 +1,142 @@
+{
+  "users": [
+    {
+      "id": "admin-1",
+      "name": "Den Admin",
+      "email": "admin@novelden.com",
+      "password": "$2a$12$XiA12gG4zluqVrWuCUD2Ye1YI9xwZ3C.BJUAyajlMvkSfqmZlQAB2",
+      "role": "admin",
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "user-1",
+      "name": "Jane Reader",
+      "email": "user@novelden.com",
+      "password": "$2a$12$rQ8x6NLlNPEOOiXDffWJz.x.UcJF3HTiglgzql/JEtFDwQg4TaS2q",
+      "role": "reader",
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "books": [
+    {
+      "id": "1",
+      "title": "The Midnight Library",
+      "author": "Eleanor Voss",
+      "genre": "Fantasy",
+      "rating": 4.9,
+      "cover": "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=560&fit=crop",
+      "description": "This story revolves around a mysterious library that exists between life and death, where every book represents a life unlived. Nora finds herself making impossible choices…",
+      "tags": [
+        "Mystery",
+        "Philosophy",
+        "Fantasy"
+      ],
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "2",
+      "title": "Crimson Sands",
+      "author": "Marco Delacroix",
+      "genre": "Adventure",
+      "rating": 4.7,
+      "cover": "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=400&h=560&fit=crop",
+      "description": "This story revolves around an exiled prince crossing scorching deserts to reclaim his throne. Ancient magic, treacherous allies, and a love that defies kingdoms…",
+      "tags": [
+        "Adventure",
+        "Magic",
+        "Royal"
+      ],
+      "createdAt": "2025-01-02T00:00:00.000Z"
+    },
+    {
+      "id": "3",
+      "title": "Echoes of Yesterday",
+      "author": "Seraphina Bloom",
+      "genre": "Romance",
+      "rating": 4.8,
+      "cover": "https://images.unsplash.com/photo-1474932430478-367dbb6832c1?w=400&h=560&fit=crop",
+      "description": "This story revolves around two souls separated by time who communicate through old letters hidden in a Victorian estate. Love transcending decades…",
+      "tags": [
+        "Romance",
+        "Historical",
+        "Letters"
+      ],
+      "createdAt": "2025-01-03T00:00:00.000Z"
+    },
+    {
+      "id": "1780202635129",
+      "title": "The Battle Begins",
+      "author": "GodSlayer03",
+      "genre": "Adventure",
+      "description": "The Battle Begins...",
+      "tags": [
+        "Romance",
+        "Action",
+        "History",
+        "Fiction"
+      ],
+      "rating": 0,
+      "cover": "/uploads/1780202635108-921997344.jpg",
+      "createdAt": "2026-05-31T04:43:55.130Z"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "c1",
+      "bookId": "1",
+      "title": "Chapter 1: The Dark Shelf",
+      "type": "chapter",
+      "order": 1,
+      "pdfUrl": "/uploads/sample.pdf",
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "c2",
+      "bookId": "1",
+      "title": "Chapter 2: The Hourglass",
+      "type": "chapter",
+      "order": 2,
+      "pdfUrl": "/uploads/sample.pdf",
+      "createdAt": "2025-01-02T00:00:00.000Z"
+    },
+    {
+      "id": "c3",
+      "bookId": "1",
+      "title": "Chapter 3: Decision Points",
+      "type": "chapter",
+      "order": 3,
+      "pdfUrl": "/uploads/sample.pdf",
+      "createdAt": "2026-05-30T10:00:00.000Z"
+    },
+    {
+      "id": "c4",
+      "bookId": "1",
+      "title": "3.1. Prequel: Nora's Childhood",
+      "type": "prequel",
+      "order": 3.1,
+      "pdfUrl": "/uploads/sample.pdf",
+      "createdAt": "2025-01-05T00:00:00.000Z"
+    }
+  ],
+  "comments": [
+    {
+      "id": "com1",
+      "chapterId": "c1",
+      "userId": "user-1",
+      "userName": "Jane Reader",
+      "content": "Wow, what an incredible opening chapter! The atmosphere is so thick.",
+      "createdAt": "2025-01-01T12:00:00.000Z"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rev1",
+      "chapterId": "c1",
+      "userId": "user-1",
+      "userName": "Jane Reader",
+      "rating": 5,
+      "comment": "An absolute masterpiece of a first chapter.",
+      "createdAt": "2025-01-01T12:05:00.000Z"
+    }
+  ]
+}
