@@ -15,6 +15,7 @@ export default function Books() {
   };
 
   const [addBookOpen, setAddBookOpen] = useState(false);
+  const [editingBook, setEditingBook] = useState(null);
   const [manageChaptersOpen, setManageChaptersOpen] = useState(false);
   const [selectedBook, setSelectedBook] = useState(null);
 
@@ -61,7 +62,46 @@ export default function Books() {
     fetchData();
   }, []);
 
-  const handleAddBookSubmit = async (e) => {
+  const resetBookForm = () => {
+    setNewTitle('');
+    setNewAuthor('');
+    setNewWriterId('');
+    setNewGenre('Fantasy');
+    setNewDesc('');
+    setNewStatus('Ongoing');
+    setNewSeason('1');
+    setNewFeatured(false);
+    setNewTrend('None');
+    setNewCover(null);
+    setEditingBook(null);
+  };
+
+  const openAddBook = () => {
+    resetBookForm();
+    setAddBookOpen(true);
+  };
+
+  const openEditBook = (book) => {
+    setEditingBook(book);
+    setNewTitle(book.title || '');
+    setNewAuthor(book.author || '');
+    setNewWriterId(book.writerId?._id || book.writerId || '');
+    setNewGenre(book.genre || 'Fantasy');
+    setNewDesc(book.description || '');
+    setNewStatus(book.status || 'Ongoing');
+    setNewSeason(String(book.seasonNumber || book.season || 1));
+    setNewFeatured(Boolean(book.featured));
+    setNewTrend(book.trend || 'None');
+    setNewCover(null);
+    setAddBookOpen(true);
+  };
+
+  const closeBookModal = () => {
+    setAddBookOpen(false);
+    resetBookForm();
+  };
+
+  const handleBookSubmit = async (e) => {
     e.preventDefault();
     if (!newTitle || !newDesc) return toast.error('Please fill in required fields');
 
@@ -85,19 +125,16 @@ export default function Books() {
     if (newCover) formData.append('coverImage', newCover);
 
     try {
-      await axios.post(`${API_URL}/books`, formData, {
+      const url = editingBook ? `${API_URL}/books/${editingBook._id}` : `${API_URL}/books`;
+      const method = editingBook ? 'put' : 'post';
+      await axios[method](url, formData, {
         headers: { ...getHeaders().headers, 'Content-Type': 'multipart/form-data' }
       });
-      toast.success('Book created successfully!');
-      setAddBookOpen(false);
+      toast.success(editingBook ? 'Book updated successfully!' : 'Book created successfully!');
+      closeBookModal();
       fetchData();
-      
-      // Reset form
-      setNewTitle(''); setNewAuthor(''); setNewWriterId(''); setNewGenre('Fantasy');
-      setNewDesc(''); setNewStatus('Ongoing'); setNewSeason('1'); setNewFeatured(false);
-      setNewTrend('None'); setNewCover(null);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to add book');
+      toast.error(err.response?.data?.error || (editingBook ? 'Failed to update book' : 'Failed to add book'));
     }
   };
 
@@ -182,7 +219,7 @@ export default function Books() {
           </h1>
           <p className="text-xs text-coffee-400 font-sans mt-1">Add, update, and manage story chapters.</p>
         </div>
-        <button onClick={() => setAddBookOpen(true)} className="px-5 py-3 rounded-xl font-sans text-xs font-bold text-espresso hover:scale-105 transition-transform" style={{ background: 'linear-gradient(135deg, #d4a574, #c08040)' }}>
+        <button onClick={openAddBook} className="px-5 py-3 rounded-xl font-sans text-xs font-bold text-espresso hover:scale-105 transition-transform" style={{ background: 'linear-gradient(135deg, #d4a574, #c08040)' }}>
           + Add Book
         </button>
       </div>
@@ -225,6 +262,17 @@ export default function Books() {
                   <td className="px-5 py-3 text-coffee-300 capitalize">{b.status}</td>
                   <td className="px-5 py-3 text-coffee-300">{b.chapters?.length || 0}</td>
                   <td className="px-5 py-3 flex gap-2 items-center h-full mt-2">
+                    <button
+                      onClick={() => openEditBook(b)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-coffee-800 text-coffee-300 hover:text-yellow-600 hover:border-yellow-600/60 transition-colors"
+                      title="Edit book"
+                      aria-label={`Edit ${b.title}`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    </button>
                     <button onClick={() => openManageChapters(b)} className="text-xs text-yellow-600 font-semibold hover:underline">Manage Chapters</button>
                     <button onClick={() => handleDeleteBook(b._id)} className="text-xs text-red-500 font-semibold hover:underline">Delete</button>
                   </td>
@@ -238,10 +286,10 @@ export default function Books() {
       {/* Add Book Modal */}
       {addBookOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setAddBookOpen(false)} />
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={closeBookModal} />
           <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto p-8 rounded-3xl border border-coffee-800 bg-espresso">
-            <h3 className="font-serif text-2xl font-bold text-coffee-100 mb-6">Create New Book</h3>
-            <form onSubmit={handleAddBookSubmit} className="space-y-4">
+            <h3 className="font-serif text-2xl font-bold text-coffee-100 mb-6">{editingBook ? 'Edit Book' : 'Create New Book'}</h3>
+            <form onSubmit={handleBookSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs uppercase text-coffee-400 mb-1">Title *</label>
@@ -307,10 +355,13 @@ export default function Books() {
               <div>
                 <label className="block text-xs uppercase text-coffee-400 mb-1">Cover Image</label>
                 <input type="file" accept="image/*" onChange={e => setNewCover(e.target.files[0])} className="w-full text-sm text-coffee-400" />
+                {editingBook && (
+                  <p className="mt-2 text-[11px] text-coffee-500 font-sans">Leave empty to keep the current cover.</p>
+                )}
               </div>
               <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setAddBookOpen(false)} className="flex-1 py-3 bg-coffee-800 text-coffee-100 rounded-xl font-bold">Cancel</button>
-                <button type="submit" className="flex-1 py-3 bg-yellow-600 text-black rounded-xl font-bold">Save Book</button>
+                <button type="button" onClick={closeBookModal} className="flex-1 py-3 bg-coffee-800 text-coffee-100 rounded-xl font-bold">Cancel</button>
+                <button type="submit" className="flex-1 py-3 bg-yellow-600 text-black rounded-xl font-bold">{editingBook ? 'Update Book' : 'Save Book'}</button>
               </div>
             </form>
           </div>

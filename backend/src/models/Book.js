@@ -42,6 +42,7 @@ const bookSchema = new mongoose.Schema({
   genre: { type: String, required: true },
   description: { type: String, required: true },
   cover: { type: String, default: '' },
+  coverImage: { type: String, default: '' },
   rating: { type: Number, default: 0 },
   reads: { type: Number, default: 0 },
   status: { 
@@ -50,6 +51,8 @@ const bookSchema = new mongoose.Schema({
     default: 'Ongoing' 
   },
   seasonNumber: { type: Number },
+  featured: { type: Boolean, default: false },
+  trend: { type: String, enum: ['None', 'Hot', 'New', 'Rising'], default: 'None' },
   tags: [{ type: String }],
   chapters: [chapterSchema],
   reviews: [reviewSchema],

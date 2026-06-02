@@ -223,12 +223,29 @@ router.put('/:id', uploadImage.single('coverImage'), async (req, res) => {
   try {
     const { title, description, author, writerId, genre, views, rating, status, season, featured, trend } = req.body;
     const book = await Book.findById(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+
+    let resolvedAuthor = author;
+    if (writerId) {
+      const writer = await Writer.findById(writerId).select('name');
+      if (writer) resolvedAuthor = writer.name;
+    }
+    if (!resolvedAuthor) resolvedAuthor = 'Unknown Author';
     
     let updateData = {
-      title, description, author, genre, reads: Number(views) || 0, rating: Number(rating) || 0, status, seasonNumber: Number(season) || 1, trend, featured: featured === 'true'
+      title,
+      description,
+      author: resolvedAuthor,
+      genre,
+      reads: Number.isFinite(Number(views)) ? Number(views) : book.reads,
+      rating: Number.isFinite(Number(rating)) ? Number(Number(rating).toFixed(1)) : book.rating,
+      status,
+      seasonNumber: Number(season) || 1,
+      trend,
+      featured: featured === 'true'
     };
     
-    if (writerId) updateData.writerId = writerId;
+    updateData.writerId = writerId || null;
     
     if (req.file) {
       // Delete old cover(s) from Cloudinary if exists

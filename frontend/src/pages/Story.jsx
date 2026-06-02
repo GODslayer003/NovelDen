@@ -77,12 +77,6 @@ export default function Story() {
     }
   }, [id])
 
-  useEffect(() => {
-    return () => {
-      if (pdfUrl.startsWith('blob:')) URL.revokeObjectURL(pdfUrl)
-    }
-  }, [pdfUrl])
-
   // GSAP Entrance Animations
   useEffect(() => {
     if (!loading && book) {
@@ -146,19 +140,7 @@ export default function Story() {
         setPdfError('')
         setPdfLoading(true)
 
-        const pdfRes = await axios.get(`${API_URL}/books/${id}/chapters/${chap._id}/pdf?t=${Date.now()}`, {
-          responseType: 'blob'
-        })
-        const contentType = pdfRes.headers['content-type'] || ''
-        if (!contentType.includes('application/pdf')) {
-          throw new Error('The chapter file was not returned as a PDF.')
-        }
-
-        const nextPdfUrl = URL.createObjectURL(pdfRes.data)
-        setPdfUrl(prevUrl => {
-          if (prevUrl.startsWith('blob:')) URL.revokeObjectURL(prevUrl)
-          return nextPdfUrl
-        })
+        setPdfUrl(`${API_URL}/books/${id}/chapters/${chap._id}/pdf?t=${Date.now()}`)
 
         // Save last read chapter to local storage
         const readInfo = { id: chap._id, title: chap.title }
@@ -608,14 +590,14 @@ export default function Story() {
           />
 
           {/* Modal Container */}
-          <div className="relative w-full max-w-5xl h-[90vh] flex flex-col md:flex-row rounded-3xl overflow-hidden border shadow-2xl animate-fade-in"
+          <div className="relative w-full max-w-5xl h-[96dvh] md:h-[90vh] flex flex-col md:flex-row rounded-3xl overflow-hidden border shadow-2xl animate-fade-in"
                style={{
                  background: '#140c00',
                  borderColor: 'rgba(212, 165, 116, 0.25)'
                }}>
             
             {/* Left Hand: PDF Viewer / Lock Screen */}
-            <div className="flex-1 flex flex-col h-1/2 md:h-full border-r border-coffee-900">
+            <div className="flex flex-col h-[68dvh] md:h-full md:flex-1 border-b md:border-b-0 md:border-r border-coffee-900">
               {/* Top Title Bar */}
               <div className="p-4 flex items-center justify-between border-b border-coffee-900 bg-coffee-950/80">
                 <div>
@@ -631,7 +613,7 @@ export default function Story() {
               </div>
 
               {/* View Content Area */}
-              <div className="flex-1 bg-[#1a1103] relative">
+              <div className="flex-1 bg-[#1a1103] relative min-h-0">
                 {chapterLocked ? (
                   // Gorgeous Locking Screen for Guest Restrictions
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-gradient-to-b from-[#251509] to-[#120701]">
@@ -667,18 +649,46 @@ export default function Story() {
                     </div>
                   </div>
                 ) : (
-                  // Custom Designed Embedded PDF Viewer
-                  <iframe 
-                    src={`${pdfUrl}#toolbar=0&navpanes=0`} 
-                    className="w-full h-full border-none"
-                    title={activeChapter.title}
-                  />
+                  <div className="absolute inset-0 bg-[#111]">
+                    <object
+                      data={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                      type="application/pdf"
+                      className="hidden md:block w-full h-full border-none"
+                      aria-label={activeChapter.title}
+                    >
+                      <iframe
+                        src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                        className="w-full h-full border-none"
+                        title={activeChapter.title}
+                      />
+                    </object>
+                    <div className="md:hidden h-full flex flex-col">
+                      <iframe
+                        src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                        className="flex-1 w-full border-none bg-white"
+                        title={activeChapter.title}
+                      />
+                      <div className="shrink-0 flex items-center justify-between gap-3 border-t border-coffee-900 bg-coffee-950/95 px-4 py-3">
+                        <span className="font-sans text-[11px] text-coffee-400 leading-tight">
+                          If your browser shows a PDF card, open it directly for the best mobile reading view.
+                        </span>
+                        <a
+                          href={pdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0 rounded-lg px-4 py-2 font-sans text-xs font-bold text-espresso bg-yellow-600"
+                        >
+                          Open PDF
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
             {/* Right Hand: Comments & Review Tabs */}
-            <div className="w-full md:w-96 h-1/2 md:h-full flex flex-col bg-coffee-950/40">
+            <div className="w-full md:w-96 flex-1 md:h-full min-h-0 flex flex-col bg-coffee-950/40">
               
               {/* Tab Header Selector */}
               <div className="flex border-b border-coffee-900 bg-coffee-950 items-center justify-between">
