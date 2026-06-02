@@ -42,7 +42,7 @@ export default function Books() {
     try {
       const userStr = localStorage.getItem('novelden_admin_user');
       const user = userStr ? JSON.parse(userStr) : null;
-      const queryParams = user && user.role === 'admin' ? `?uploadedBy=${user.id}` : '';
+      const queryParams = user && user.role === 'admin' ? `?visibleToUser=${user.id}` : '';
       
       const [booksRes, writersRes] = await Promise.all([
         axios.get(`${API_URL}/books${queryParams}`),

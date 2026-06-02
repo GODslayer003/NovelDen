@@ -170,7 +170,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 flex flex-col gap-2">
-          {ALL_NAV.filter(n => n.to !== '/users' || adminRole === 'superadmin').map(n => (
+          {ALL_NAV.filter(n => (n.to !== '/users' && n.to !== '/writers') || adminRole === 'superadmin').map(n => (
             <Link
               key={n.to}
               to={n.to}
@@ -199,7 +199,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/books" element={<Books />} />
-          <Route path="/writers" element={<WritersAdmin />} />
+          {adminRole === 'superadmin' && <Route path="/writers" element={<WritersAdmin />} />}
           <Route path="/news" element={<NewsAdmin />} />
           {adminRole === 'superadmin' && <Route path="/users" element={<UsersAdmin />} />}
         </Routes>

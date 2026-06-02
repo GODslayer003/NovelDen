@@ -6,6 +6,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cloudinary from 'cloudinary';
 import Book from '../models/Book.js';
+import User from '../models/User.js';
+import Writer from '../models/Writer.js';
 import { uploadImage, uploadPDF, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
@@ -136,13 +138,22 @@ const sendPdfHeaders = (res, contentLength) => {
 
 router.get('/', async (req, res) => {
   try {
-    const { featured, trend, search, writer, uploadedBy } = req.query;
+    const { featured, trend, search, writer, uploadedBy, visibleToUser } = req.query;
     let query = {};
     if (featured) query.featured = featured === 'true';
     if (trend) query.trend = trend;
     if (writer) query.writerId = writer;
     if (uploadedBy) query.uploadedBy = uploadedBy;
     if (search) query.title = { $regex: search, $options: 'i' };
+
+    if (visibleToUser) {
+      const user = await User.findById(visibleToUser).select('email');
+      const linkedWriter = user?.email ? await Writer.findOne({ email: user.email }).select('_id') : null;
+      const ownership = [{ uploadedBy: visibleToUser }];
+      if (linkedWriter) ownership.push({ writerId: linkedWriter._id });
+      delete query.uploadedBy;
+      query = { $and: [query, { $or: ownership }] };
+    }
     
     const books = await Book.find(query).populate('writerId', 'name');
     res.json(books);
@@ -421,8 +432,11 @@ router.post('/:id/chapters/:chapId/comments', async (req, res) => {
     const existing = book.comments.find(
       c => c.chapterId.toString() === req.params.chapId && c.userId.toString() === userId
     );
-    if (existing) {
-      return res.status(409).json({ error: 'You have already posted a comment on this chapter' });
+    const existingReview = book.reviews.find(
+      r => r.chapterId.toString() === req.params.chapId && r.userId.toString() === userId
+    );
+    if (existing || existingReview) {
+      return res.status(409).json({ error: 'You have already posted on this chapter. You can still reply to comments.' });
     }
     
     const newComment = { chapterId: req.params.chapId, userId, userName, content, replies: [] };
@@ -463,7 +477,7 @@ router.get('/:id/chapters/:chapId/reviews', async (req, res) => {
     const book = await Book.findById(req.params.id);
     if (!book) return res.status(404).json({ error: 'Book not found' });
     const reviews = book.reviews.filter(c => c.chapterId.toString() === req.params.chapId);
-    const avg = reviews.length > 0 ? (reviews.reduce((a, b) => a + b.rating, 0) / reviews.length).toFixed(1) : 0;
+    const avg = reviews.length > 0 ? Number((reviews.reduce((a, b) => a + b.rating, 0) / reviews.length).toFixed(1)) : 0;
     res.json({ reviews: reviews.sort((a,b) => b.createdAt - a.createdAt), averageRating: avg });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -499,6 +513,10 @@ router.post('/:id/chapters/:chapId/read', async (req, res) => {
 router.post('/:id/chapters/:chapId/reviews', async (req, res) => {
   try {
     const { rating, comment, userId: reqUserId, userName: reqUserName } = req.body;
+    const numericRating = Number(rating);
+    if (!Number.isFinite(numericRating) || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
     const userId = reqUserId || '000000000000000000000000';
     const userName = reqUserName || 'Guest User';
     
@@ -509,16 +527,19 @@ router.post('/:id/chapters/:chapId/reviews', async (req, res) => {
     const existing = book.reviews.find(
       r => r.chapterId.toString() === req.params.chapId && r.userId.toString() === userId
     );
-    if (existing) {
-      return res.status(409).json({ error: 'You have already posted a review on this chapter' });
+    const existingComment = book.comments.find(
+      c => c.chapterId.toString() === req.params.chapId && c.userId.toString() === userId
+    );
+    if (existing || existingComment) {
+      return res.status(409).json({ error: 'You have already posted on this chapter. You can still reply to comments.' });
     }
     
-    const newReview = { chapterId: req.params.chapId, userId, userName, rating, comment };
+    const newReview = { chapterId: req.params.chapId, userId, userName, rating: numericRating, comment };
     book.reviews.push(newReview);
     
     // Update book overall rating
     const totalRating = book.reviews.reduce((a, b) => a + b.rating, 0);
-    book.rating = totalRating / book.reviews.length;
+    book.rating = Number((totalRating / book.reviews.length).toFixed(1));
     
     await book.save();
     res.status(201).json(book.reviews[book.reviews.length - 1]);

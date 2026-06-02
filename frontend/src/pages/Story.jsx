@@ -8,6 +8,8 @@ import AuthModal from '../components/AuthModal'
 
 import { API_URL, STATIC_URL } from '../utils/api'
 
+const CHAPTERS_PER_PAGE = 10
+
 export default function Story() {
   const { id } = useParams()
   const { user } = useAuthStore()
@@ -16,6 +18,9 @@ export default function Story() {
   const [book, setBook] = useState(null)
   const [chapters, setChapters] = useState([])
   const [sortOrder, setSortOrder] = useState('asc') // 'asc' = old->new, 'desc' = new->old
+  const [chapterPage, setChapterPage] = useState(1)
+  const [pageJump, setPageJump] = useState('')
+  const [highlightedChapterId, setHighlightedChapterId] = useState('')
   const [loading, setLoading] = useState(true)
   const [lastRead, setLastRead] = useState(null)
   const [authOpen, setAuthOpen] = useState(false)
@@ -159,6 +164,7 @@ export default function Story() {
         const readInfo = { id: chap._id, title: chap.title }
         localStorage.setItem(`last_read_book_${id}`, JSON.stringify(readInfo))
         setLastRead(readInfo)
+        setHighlightedChapterId(chap._id)
 
         // Fetch comments and reviews for this chapter
         fetchComments(chap._id)
@@ -203,6 +209,10 @@ export default function Story() {
   // Add Discussion (Comment or Review)
   const handleAddDiscussion = async (e) => {
     e.preventDefault()
+    if (userHasTopLevelDiscussion) {
+      toast.error('You have already posted on this chapter. You can still reply to comments.')
+      return
+    }
     if (!newComment.trim() && newRating === 0) return
     
     try {
@@ -235,7 +245,7 @@ export default function Story() {
         }
       }
     } catch (err) {
-      toast.error('Failed to post discussion')
+      toast.error(err.response?.data?.error || 'Failed to post discussion')
     }
   }
 
@@ -267,11 +277,61 @@ export default function Story() {
   // Check if user has already commented or reviewed
   const userHasCommented = user ? comments.some(c => c.userId === user.id) : false;
   const userHasReviewed = user ? reviews.some(r => r.userId === user.id) : false;
+  const userHasTopLevelDiscussion = userHasCommented || userHasReviewed;
 
   // Sort chapters
   const sortedChapters = [...chapters].sort((a, b) => {
     return sortOrder === 'asc' ? a.order - b.order : b.order - a.order
   })
+  const totalChapterPages = Math.max(1, Math.ceil(sortedChapters.length / CHAPTERS_PER_PAGE))
+  const chapterPageStart = (chapterPage - 1) * CHAPTERS_PER_PAGE
+  const paginatedChapters = sortedChapters.slice(chapterPageStart, chapterPageStart + CHAPTERS_PER_PAGE)
+
+  useEffect(() => {
+    setChapterPage(1)
+  }, [sortOrder, id])
+
+  useEffect(() => {
+    if (chapterPage > totalChapterPages) setChapterPage(totalChapterPages)
+  }, [chapterPage, totalChapterPages])
+
+  const goToChapterOnList = (chap, shouldOpen = false) => {
+    if (!chap) {
+      toast.error('Chapter not found')
+      return
+    }
+
+    const index = sortedChapters.findIndex(c => c._id === chap._id)
+    if (index < 0) {
+      toast.error('Chapter not found')
+      return
+    }
+
+    setChapterPage(Math.floor(index / CHAPTERS_PER_PAGE) + 1)
+    setHighlightedChapterId(chap._id)
+    setTimeout(() => {
+      document.getElementById(`chapter-row-${chap._id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+    if (shouldOpen) openChapter(chap)
+  }
+
+  const handleIndexJump = (e) => {
+    e.preventDefault()
+    const value = Number(pageJump)
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error('Enter a valid chapter index or order number')
+      return
+    }
+
+    const exactOrder = sortedChapters.find(c => Number(c.order) === value)
+    const byIndex = sortedChapters[Math.floor(value) - 1]
+    goToChapterOnList(exactOrder || byIndex, false)
+  }
+
+  const formatRating = (value) => {
+    const rating = Number(value)
+    return Number.isFinite(rating) && rating > 0 ? rating.toFixed(1) : 'N/A'
+  }
 
   // Format type badge
   const getTypeBadge = (type) => {
@@ -315,9 +375,8 @@ export default function Story() {
               <span>Your last read chap was:</span>
               <button 
                 onClick={() => {
-                  const chapObj = chapters.find(c => c.id === lastRead.id)
-                  if (chapObj) openChapter(chapObj)
-                  else toast.error('Chapter not found')
+                  const chapObj = chapters.find(c => c._id === lastRead.id || c.id === lastRead.id)
+                  goToChapterOnList(chapObj, true)
                 }}
                 className="text-yellow-600 hover:text-yellow-500 font-bold hover:underline"
               >
@@ -357,8 +416,8 @@ export default function Story() {
                 {book.genre}
               </span>
               <div className="flex items-center gap-1.5 text-yellow-400 font-semibold text-sm">
-                <span>★ {book.rating || 'N/A'}</span>
-                <span className="text-coffee-400 text-xs">({book.rating ? 'Computed Average' : 'No ratings yet'})</span>
+                <span>★ {formatRating(book.rating)}</span>
+                <span className="text-coffee-400 text-xs">({Number(book.rating) > 0 ? 'Computed Average' : 'No ratings yet'})</span>
               </div>
             </div>
 
@@ -407,8 +466,25 @@ export default function Story() {
               Table of Contents
             </h2>
 
-            <div className="flex items-center gap-2">
-              <span className="font-sans text-xs text-coffee-400">Sort by:</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <form onSubmit={handleIndexJump} className="flex items-center gap-2">
+                <label htmlFor="chapter-index-jump" className="font-sans text-xs text-coffee-400">Page field:</label>
+                <input
+                  id="chapter-index-jump"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={pageJump}
+                  onChange={e => setPageJump(e.target.value)}
+                  placeholder="Index"
+                  className="w-24 px-3 py-1.5 rounded-lg outline-none font-sans text-xs bg-coffee-950 border border-coffee-800 text-coffee-200 focus:border-yellow-600"
+                />
+                <button type="submit" className="px-3 py-1.5 rounded-lg font-sans text-xs font-bold text-espresso bg-yellow-600 hover:bg-yellow-500 transition-colors">
+                  Go
+                </button>
+              </form>
+              <div className="flex items-center gap-2">
+                <span className="font-sans text-xs text-coffee-400">Sort by:</span>
               <select
                 value={sortOrder}
                 onChange={e => setSortOrder(e.target.value)}
@@ -417,6 +493,7 @@ export default function Story() {
                 <option value="asc">Oldest → Newest</option>
                 <option value="desc">Newest → Oldest</option>
               </select>
+              </div>
             </div>
           </div>
 
@@ -438,19 +515,22 @@ export default function Story() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-coffee-900/40">
-                  {sortedChapters.map((chap, idx) => {
+                  {paginatedChapters.map((chap, idx) => {
                     const isNew = (Date.now() - new Date(chap.createdAt)) / (1000 * 60 * 60 * 24) < 3
+                    const isHighlighted = highlightedChapterId === chap._id
                     return (
                       <tr 
                         key={chap._id}
-                        className="hover:bg-coffee-900/20 group transition-colors duration-200"
+                        id={`chapter-row-${chap._id}`}
+                        className={`${isHighlighted ? 'bg-yellow-600/10 ring-1 ring-yellow-600/40' : 'hover:bg-coffee-900/20'} group transition-colors duration-200`}
                       >
                         <td className="py-4 px-4 font-mono text-xs text-coffee-400">
-                          {chap.order}
+                          {chapterPageStart + idx + 1}
+                          <span className="ml-2 text-coffee-600">({chap.order})</span>
                         </td>
                         <td className="py-4 px-4 font-medium text-coffee-200">
                           <button 
-                            onClick={() => openChapter(chap)}
+                            onClick={() => goToChapterOnList(chap, true)}
                             className="hover:text-[#d4a574] text-left transition-colors font-sans"
                           >
                             {chap.title}
@@ -476,7 +556,7 @@ export default function Story() {
                         </td>
                         <td className="py-4 px-4 text-right">
                           <button 
-                            onClick={() => openChapter(chap)}
+                            onClick={() => goToChapterOnList(chap, true)}
                             className="inline-flex items-center gap-1 text-xs font-semibold text-yellow-600 hover:text-yellow-500 group-hover:translate-x-1 transition-transform"
                           >
                             Read PDF →
@@ -487,6 +567,32 @@ export default function Story() {
                   })}
                 </tbody>
               </table>
+              {totalChapterPages > 1 && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-coffee-900/50 px-4 py-4 font-sans text-xs text-coffee-400">
+                  <span>
+                    Showing {chapterPageStart + 1}-{Math.min(chapterPageStart + CHAPTERS_PER_PAGE, sortedChapters.length)} of {sortedChapters.length} chapters
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setChapterPage(p => Math.max(1, p - 1))}
+                      disabled={chapterPage === 1}
+                      className="px-3 py-1.5 rounded-lg border border-coffee-800 text-coffee-200 disabled:opacity-40 disabled:cursor-not-allowed hover:border-yellow-600"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-2 text-coffee-300">Page {chapterPage} of {totalChapterPages}</span>
+                    <button
+                      type="button"
+                      onClick={() => setChapterPage(p => Math.min(totalChapterPages, p + 1))}
+                      disabled={chapterPage === totalChapterPages}
+                      className="px-3 py-1.5 rounded-lg border border-coffee-800 text-coffee-200 disabled:opacity-40 disabled:cursor-not-allowed hover:border-yellow-600"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -616,7 +722,7 @@ export default function Story() {
                               onClick={() => setNewRating(newRating === star ? 0 : star)}
                               className="text-base transition-transform active:scale-95 text-yellow-500"
                               title="Click again to clear rating (makes it a comment)"
-                              disabled={(userHasReviewed && star > 0) || (userHasCommented && newRating === 0 && star === 0)}
+                              disabled={userHasTopLevelDiscussion}
                             >
                               {star <= newRating ? '★' : '☆'}
                             </button>
@@ -624,9 +730,9 @@ export default function Story() {
                         </div>
                       </div>
                       
-                      {((newRating > 0 && userHasReviewed) || (newRating === 0 && userHasCommented)) ? (
+                      {userHasTopLevelDiscussion ? (
                         <div className="w-full p-3 rounded-xl font-sans text-xs border border-red-900/30 bg-red-900/10 text-red-400 text-center">
-                          You have already posted a {newRating > 0 ? 'review' : 'comment'} on this chapter.
+                          You have already posted on this chapter. You can still reply to comments.
                         </div>
                       ) : (
                         <>

@@ -6,7 +6,7 @@ const router = express.Router();
 // GET all users (for admin panel)
 router.get('/', async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, page, limit } = req.query;
     let query = {};
     if (search) {
       query = {
@@ -16,7 +16,28 @@ router.get('/', async (req, res) => {
         ]
       };
     }
-    const users = await User.find(query).select('-password').sort({ createdAt: -1 });
+
+    const pageNumber = Math.max(1, Number(page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(limit) || 0));
+    const baseQuery = User.find(query).select('-password').sort({ createdAt: -1 });
+
+    if (pageSize > 0) {
+      const [users, total] = await Promise.all([
+        baseQuery.skip((pageNumber - 1) * pageSize).limit(pageSize),
+        User.countDocuments(query)
+      ]);
+      return res.json({
+        users,
+        pagination: {
+          page: pageNumber,
+          limit: pageSize,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / pageSize))
+        }
+      });
+    }
+
+    const users = await baseQuery;
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });

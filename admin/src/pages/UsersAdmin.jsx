@@ -4,15 +4,19 @@ import toast from 'react-hot-toast';
 import { API_URL } from '../config/api';
 
 export default function UsersAdmin() {
+  const USERS_PER_PAGE = 10;
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({ total: 0, verified: 0, unverified: 0, admins: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, limit: USERS_PER_PAGE, total: 0, totalPages: 1 });
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`${API_URL}/users?search=${encodeURIComponent(search)}`);
-      setUsers(res.data);
+      const res = await axios.get(`${API_URL}/users?search=${encodeURIComponent(search)}&page=${page}&limit=${USERS_PER_PAGE}`);
+      setUsers(res.data.users || []);
+      setPagination(res.data.pagination || { page: 1, limit: USERS_PER_PAGE, total: 0, totalPages: 1 });
     } catch (err) {
       toast.error('Failed to load users');
     }
@@ -27,6 +31,10 @@ export default function UsersAdmin() {
 
   useEffect(() => {
     Promise.all([fetchUsers(), fetchStats()]).finally(() => setLoading(false));
+  }, [search, page]);
+
+  useEffect(() => {
+    setPage(1);
   }, [search]);
 
   const handleDelete = async (id, role) => {
@@ -150,6 +158,32 @@ export default function UsersAdmin() {
             </tbody>
           </table>
         </div>
+        {pagination.totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-t border-coffee-900/40 font-sans text-xs text-coffee-400">
+            <span>
+              Showing {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} users
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-3 py-1.5 rounded-lg border border-coffee-800 text-coffee-200 disabled:opacity-40 disabled:cursor-not-allowed hover:border-yellow-600"
+              >
+                Previous
+              </button>
+              <span className="px-2 text-coffee-300">Page {pagination.page} of {pagination.totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                disabled={page >= pagination.totalPages}
+                className="px-3 py-1.5 rounded-lg border border-coffee-800 text-coffee-200 disabled:opacity-40 disabled:cursor-not-allowed hover:border-yellow-600"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
