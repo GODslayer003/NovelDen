@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { API_URL, STATIC_URL } from '../config/api';
 
 export default function NewsAdmin() {
   const [news, setNews] = useState([]);
@@ -21,8 +22,8 @@ export default function NewsAdmin() {
   const fetchData = async () => {
     try {
       const [newsRes, writersRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/news'),
-        axios.get('http://localhost:5000/api/writers')
+        axios.get(`${API_URL}/news`),
+        axios.get(`${API_URL}/writers`)
       ]);
       setNews(newsRes.data);
       setWriters(writersRes.data);
@@ -44,7 +45,7 @@ export default function NewsAdmin() {
     }
 
     try {
-      await axios.post('http://localhost:5000/api/news', data, {
+      await axios.post(`${API_URL}/news`, data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       toast.success('Announcement posted!');
@@ -59,7 +60,7 @@ export default function NewsAdmin() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this announcement?')) return;
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/news/${id}`);
+      await axios.delete(`${API_URL}/news/${id}`);
       toast.success('Announcement deleted');
       fetchData();
     } catch (err) {
@@ -139,7 +140,7 @@ export default function NewsAdmin() {
               <div key={item._id} className="bg-espresso/40 p-5 rounded-2xl border border-coffee-800 flex gap-4">
                 <div className="w-12 h-12 rounded-full bg-coffee-800 overflow-hidden flex-shrink-0">
                   {(item.writerId?.avatar || item.writerId?.avatarUrl) ? (
-                    <img src={(item.writerId.avatar || item.writerId.avatarUrl).startsWith('http') ? (item.writerId.avatar || item.writerId.avatarUrl) : `${import.meta.env.VITE_STATIC_URL}${item.writerId.avatar || item.writerId.avatarUrl}`} alt="" className="w-full h-full object-cover" />
+                    <img src={(item.writerId.avatar || item.writerId.avatarUrl).startsWith('http') ? (item.writerId.avatar || item.writerId.avatarUrl) : `${STATIC_URL}${item.writerId.avatar || item.writerId.avatarUrl}`} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xl">✍️</div>
                   )}
@@ -155,13 +156,13 @@ export default function NewsAdmin() {
                   <p className="text-sm text-coffee-200 mb-3 whitespace-pre-wrap">{item.content}</p>
                   
                   {item.mediaUrl && item.mediaType === 'image' && (
-                    <img src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} alt="Attached" className="max-h-48 rounded-lg" />
+                    <img src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${STATIC_URL}${item.mediaUrl}`} alt="Attached" className="max-h-48 rounded-lg" />
                   )}
                   {item.mediaUrl && item.mediaType === 'video' && (
-                    <video src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} controls className="max-h-48 rounded-lg" />
+                    <video src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${STATIC_URL}${item.mediaUrl}`} controls className="max-h-48 rounded-lg" />
                   )}
                   {item.mediaUrl && item.mediaType === 'music' && (
-                    <audio src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${import.meta.env.VITE_STATIC_URL}${item.mediaUrl}`} controls className="w-full" />
+                    <audio src={(item.mediaUrl || '').startsWith('http') ? item.mediaUrl : `${STATIC_URL}${item.mediaUrl}`} controls className="w-full" />
                   )}
                 </div>
               </div>

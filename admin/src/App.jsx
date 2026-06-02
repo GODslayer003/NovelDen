@@ -8,6 +8,7 @@ import Books from './pages/Books'
 import WritersAdmin from './pages/WritersAdmin'
 import NewsAdmin from './pages/NewsAdmin'
 import UsersAdmin from './pages/UsersAdmin'
+import { API_URL } from './config/api'
 
 const ALL_NAV = [
   { to: '/', label: '📊 Dashboard' },
@@ -45,7 +46,7 @@ export default function App() {
     e.preventDefault()
     setAuthenticating(true)
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', { email, password })
+      const res = await axios.post(`${API_URL}/auth/login`, { email: email.trim(), password })
       if (res.data.success || res.data.token) {
         const { token, user } = res.data
         if (user.role !== 'admin' && user.role !== 'superadmin') {

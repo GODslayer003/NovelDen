@@ -5,6 +5,7 @@ import Book from '../models/Book.js';
 import { uploadImage, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_fallback_secret';
 
 // JWT middleware for profile routes
 const authMiddleware = async (req, res, next) => {
@@ -13,7 +14,7 @@ const authMiddleware = async (req, res, next) => {
     if (!authHeader) return res.status(401).json({ error: 'No token provided' });
     
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
+    const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.id).select('-password');
     if (!user) return res.status(404).json({ error: 'User not found' });
     

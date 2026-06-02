@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { API_URL } from '../config/api';
 
 export default function UsersAdmin() {
   const [users, setUsers] = useState([]);
@@ -10,7 +11,7 @@ export default function UsersAdmin() {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/users?search=${search}`);
+      const res = await axios.get(`${API_URL}/users?search=${encodeURIComponent(search)}`);
       setUsers(res.data);
     } catch (err) {
       toast.error('Failed to load users');
@@ -19,7 +20,7 @@ export default function UsersAdmin() {
 
   const fetchStats = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/users/stats');
+      const res = await axios.get(`${API_URL}/users/stats`);
       setStats(res.data);
     } catch (err) {}
   };
@@ -36,7 +37,7 @@ export default function UsersAdmin() {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
     
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/users/${id}`);
+      await axios.delete(`${API_URL}/users/${id}`);
       toast.success('User deleted');
       fetchUsers();
       fetchStats();

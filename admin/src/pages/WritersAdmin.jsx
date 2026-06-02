@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { API_URL, STATIC_URL } from '../config/api';
 
 export default function WritersAdmin() {
   const [writers, setWriters] = useState([]);
@@ -13,7 +14,7 @@ export default function WritersAdmin() {
 
   const fetchWriters = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/writers');
+      const res = await axios.get(`${API_URL}/writers`);
       setWriters(res.data);
     } catch (err) {
       toast.error('Failed to load writers');
@@ -38,10 +39,10 @@ export default function WritersAdmin() {
 
     try {
       if (editingId) {
-        await axios.put(`${import.meta.env.VITE_API_URL}/writers/${editingId}`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await axios.put(`${API_URL}/writers/${editingId}`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
         toast.success('Writer updated');
       } else {
-        await axios.post('http://localhost:5000/api/writers', data, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await axios.post(`${API_URL}/writers`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
         toast.success('Writer created');
       }
       setFormData({ name: '', genre: '', bio: '', featured: false, email: '', password: '' });
@@ -62,7 +63,7 @@ export default function WritersAdmin() {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this writer?')) return;
     try {
-      await axios.delete(`${import.meta.env.VITE_API_URL}/writers/${id}`);
+      await axios.delete(`${API_URL}/writers/${id}`);
       toast.success('Writer deleted');
       fetchWriters();
     } catch (err) {
@@ -133,7 +134,7 @@ export default function WritersAdmin() {
                   <div className="w-16 h-16 rounded-full overflow-hidden bg-coffee-900 flex-shrink-0">
                     {(w.avatar || w.avatarUrl) ? (
                       <img
-                        src={(w.avatar || w.avatarUrl).startsWith('http') ? (w.avatar || w.avatarUrl) : `${import.meta.env.VITE_STATIC_URL}${w.avatar || w.avatarUrl}`}
+                        src={(w.avatar || w.avatarUrl).startsWith('http') ? (w.avatar || w.avatarUrl) : `${STATIC_URL}${w.avatar || w.avatarUrl}`}
                         alt=""
                         className="w-full h-full object-cover"
                       />

@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-
-const API_URL = import.meta.env.VITE_API_URL;
-const STATIC_URL = import.meta.env.VITE_STATIC_URL;
+import { API_URL, STATIC_URL } from '../config/api';
 
 export default function Books() {
   const [books, setBooks] = useState([]);

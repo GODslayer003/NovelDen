@@ -30,6 +30,38 @@ if (fs.existsSync(backendEnv)) {
 const app  = express()
 const PORT = process.env.PORT || 5000
 
+const defaultAllowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:4000',
+  'http://localhost:5173',
+  'https://novelden.vercel.app',
+  'https://adminnovelden.vercel.app'
+]
+
+const envAllowedOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_URL || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean)
+
+const allowedOrigins = new Set([...defaultAllowedOrigins, ...envAllowedOrigins])
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      return callback(null, true)
+    }
+
+    if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) {
+      return callback(null, true)
+    }
+
+    return callback(new Error(`CORS blocked origin: ${origin}`))
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}
+
 mongoose.connect(process.env.MONGODB_URI, { family: 4 })
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB Connection Error:', err))
@@ -43,16 +75,8 @@ app.use(helmet({
   xFrameOptions: false // Allow iframes from frontend
 }))
 
-app.use(cors({
-  origin: [
-    'http://localhost:3000', 
-    'http://localhost:4000', 
-    'http://localhost:5173',
-    'https://novelden.vercel.app',
-    'https://adminnovelden.vercel.app'
-  ],
-  credentials: true
-}))
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 
 app.use(morgan('dev'))
 
