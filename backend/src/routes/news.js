@@ -1,6 +1,6 @@
 import express from 'express';
 import News from '../models/News.js';
-import { uploadImage, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
+import { uploadNewsMedia, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
 
@@ -13,7 +13,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', uploadImage.single('media'), async (req, res) => {
+router.post('/', uploadNewsMedia.single('media'), async (req, res) => {
   try {
     const { writerId, title, content } = req.body;
     let mediaUrl = '';

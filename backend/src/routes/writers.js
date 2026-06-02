@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import Writer from '../models/Writer.js';
 import User from '../models/User.js';
-import { uploadImage, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
+import { uploadWriterMedia, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
 
@@ -25,7 +25,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', uploadImage.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
+router.post('/', uploadWriterMedia.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
   try {
     const { name, genre, bio, featured, email, password } = req.body;
     
@@ -60,7 +60,7 @@ router.post('/', uploadImage.fields([{ name: 'avatar', maxCount: 1 }, { name: 'm
   }
 });
 
-router.put('/:id', uploadImage.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
+router.put('/:id', uploadWriterMedia.fields([{ name: 'avatar', maxCount: 1 }, { name: 'music', maxCount: 1 }]), async (req, res) => {
   try {
     const { name, genre, bio, featured, email, password } = req.body;
     const writer = await Writer.findById(req.params.id);

@@ -7,6 +7,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import mongoose from 'mongoose'
+import multer from 'multer'
 import booksRouter   from './routes/books.js'
 import authRouter    from './routes/auth.js'
 import writersRouter from './routes/writers.js'
@@ -97,8 +98,13 @@ app.use('/api/profile', profileRouter)
 
 // Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack)
-  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' })
+  const status = err.status || (err instanceof multer.MulterError ? 400 : 500)
+  const message = status >= 500 && process.env.NODE_ENV === 'production'
+    ? 'Internal Server Error'
+    : err.message || 'Internal Server Error'
+
+  console.error(err.stack || err)
+  res.status(status).json({ error: message })
 })
 
 app.listen(PORT, () => console.log(`\n☕  Novel Den API → http://localhost:${PORT}\n`))
