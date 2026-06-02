@@ -4,6 +4,7 @@ import http from 'http';
 import https from 'https';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import cloudinary from 'cloudinary';
 import Book from '../models/Book.js';
 import { uploadImage, uploadPDF, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
@@ -21,6 +22,63 @@ const cloudinaryPdfCandidates = (pdfUrl) => {
       pdfUrl.replace('/video/upload/', '/raw/upload/')
     );
   }
+
+  return [...new Set(candidates)];
+};
+
+const parseCloudinaryAsset = (pdfUrl) => {
+  try {
+    const url = new URL(pdfUrl);
+    if (!/res\.cloudinary\.com$/i.test(url.hostname)) return null;
+
+    const parts = url.pathname.split('/').filter(Boolean);
+    const uploadIndex = parts.indexOf('upload');
+    if (uploadIndex < 2) return null;
+
+    const resourceType = parts[1];
+    const assetParts = parts.slice(uploadIndex + 1);
+    if (/^v\d+$/.test(assetParts[0])) assetParts.shift();
+
+    const publicIdWithFormat = assetParts.join('/');
+    const formatMatch = /\.([a-z0-9]+)$/i.exec(publicIdWithFormat);
+    const format = formatMatch ? formatMatch[1].toLowerCase() : 'pdf';
+    const publicIdWithoutFormat = publicIdWithFormat.replace(/\.[^/.]+$/, '');
+
+    return {
+      resourceType,
+      publicIdWithFormat,
+      publicIdWithoutFormat,
+      format
+    };
+  } catch {
+    return null;
+  }
+};
+
+const signedCloudinaryPdfCandidates = (pdfUrl) => {
+  const asset = parseCloudinaryAsset(pdfUrl);
+  if (!asset) return [];
+
+  const expiresAt = Math.floor(Date.now() / 1000) + 300;
+  const candidates = [];
+  const addSignedUrl = (publicId, format, resourceType) => {
+    if (!publicId) return;
+
+    try {
+      candidates.push(cloudinary.v2.utils.private_download_url(publicId, format, {
+        resource_type: resourceType,
+        type: 'upload',
+        attachment: false,
+        expires_at: expiresAt
+      }));
+    } catch {
+      // Ignore malformed candidates and continue with the remaining fallbacks.
+    }
+  };
+
+  addSignedUrl(asset.publicIdWithoutFormat, asset.format, asset.resourceType);
+  addSignedUrl(asset.publicIdWithoutFormat, asset.format, 'raw');
+  addSignedUrl(asset.publicIdWithFormat, undefined, 'raw');
 
   return [...new Set(candidates)];
 };
@@ -264,12 +322,19 @@ router.get('/:id/chapters/:chapId/pdf', async (req, res) => {
     }
 
     let lastStatus = 502;
-    for (const candidateUrl of cloudinaryPdfCandidates(chapter.pdfUrl)) {
+    let lastContentType = '';
+    const candidateUrls = [
+      ...cloudinaryPdfCandidates(chapter.pdfUrl),
+      ...signedCloudinaryPdfCandidates(chapter.pdfUrl)
+    ];
+
+    for (const candidateUrl of candidateUrls) {
       const remoteRes = await requestRemoteFile(
         candidateUrl,
         req.headers.range ? { Range: req.headers.range } : {}
       );
       lastStatus = remoteRes.statusCode || lastStatus;
+      lastContentType = remoteRes.headers['content-type'] || lastContentType;
 
       if (lastStatus >= 200 && lastStatus < 300) {
         sendPdfHeaders(res, remoteRes.headers['content-length']);
@@ -283,7 +348,18 @@ router.get('/:id/chapters/:chapId/pdf', async (req, res) => {
       remoteRes.resume();
     }
 
-    return res.status(lastStatus).json({ error: 'Failed to load PDF document' });
+    console.error('PDF delivery failed', {
+      bookId: req.params.id,
+      chapterId: req.params.chapId,
+      status: lastStatus,
+      contentType: lastContentType,
+      pdfUrl: chapter.pdfUrl
+    });
+
+    return res.status(lastStatus).json({
+      error: 'Failed to load PDF document',
+      detail: 'The uploaded PDF could not be read from storage. Re-upload this chapter PDF after deploying the latest upload fix.'
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

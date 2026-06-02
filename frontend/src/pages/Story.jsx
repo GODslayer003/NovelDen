@@ -25,6 +25,8 @@ export default function Story() {
   const [chapterLocked, setChapterLocked] = useState(false)
   const [lockMessage, setLockMessage] = useState('')
   const [pdfUrl, setPdfUrl] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfError, setPdfError] = useState('')
 
   // Comments & Reviews State
   const [comments, setComments] = useState([])
@@ -69,6 +71,12 @@ export default function Story() {
       } catch (_) {}
     }
   }, [id])
+
+  useEffect(() => {
+    return () => {
+      if (pdfUrl.startsWith('blob:')) URL.revokeObjectURL(pdfUrl)
+    }
+  }, [pdfUrl])
 
   // GSAP Entrance Animations
   useEffect(() => {
@@ -129,7 +137,23 @@ export default function Story() {
         setActiveChapter(chap)
         setChapterLocked(false)
         setLockMessage('')
-        setPdfUrl(`${API_URL}/books/${id}/chapters/${chap._id}/pdf?t=${Date.now()}`)
+        setPdfUrl('')
+        setPdfError('')
+        setPdfLoading(true)
+
+        const pdfRes = await axios.get(`${API_URL}/books/${id}/chapters/${chap._id}/pdf?t=${Date.now()}`, {
+          responseType: 'blob'
+        })
+        const contentType = pdfRes.headers['content-type'] || ''
+        if (!contentType.includes('application/pdf')) {
+          throw new Error('The chapter file was not returned as a PDF.')
+        }
+
+        const nextPdfUrl = URL.createObjectURL(pdfRes.data)
+        setPdfUrl(prevUrl => {
+          if (prevUrl.startsWith('blob:')) URL.revokeObjectURL(prevUrl)
+          return nextPdfUrl
+        })
 
         // Save last read chapter to local storage
         const readInfo = { id: chap._id, title: chap.title }
@@ -147,8 +171,11 @@ export default function Story() {
         setLockMessage(err.response.data.error)
         setPdfUrl('')
       } else {
-        toast.error(err.response?.data?.error || 'Failed to access chapter')
+        setPdfError('Failed to load this PDF. Please re-upload the chapter PDF from the Admin page.')
+        toast.error(err.response?.data?.error || 'Failed to load PDF')
       }
+    } finally {
+      setPdfLoading(false)
     }
   }
 
@@ -518,6 +545,20 @@ export default function Story() {
                     >
                       Login to Read Immediately
                     </button>
+                  </div>
+                ) : pdfLoading ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#111]">
+                    <div className="flex flex-col items-center gap-3 text-coffee-300 font-sans text-xs">
+                      <div className="h-10 w-10 rounded-full border-2 border-[#d4a574]/30 border-t-[#d4a574] animate-spin" />
+                      <span>Loading PDF...</span>
+                    </div>
+                  </div>
+                ) : pdfError ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-[#111] p-8">
+                    <div className="max-w-sm rounded-xl border border-red-900/40 bg-red-950/20 p-5 text-center">
+                      <h4 className="font-serif text-lg font-bold text-red-300 mb-2">PDF unavailable</h4>
+                      <p className="font-sans text-xs leading-relaxed text-coffee-300">{pdfError}</p>
+                    </div>
                   </div>
                 ) : (
                   // Custom Designed Embedded PDF Viewer

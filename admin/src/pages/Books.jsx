@@ -367,7 +367,7 @@ export default function Books() {
                       <span className="text-[10px] text-yellow-600 ml-2 uppercase border border-yellow-600/30 px-2 py-0.5 rounded">{c.type}</span>
                       <h5 className="text-sm font-semibold text-coffee-100 mt-1">{c.title}</h5>
                     </div>
-                    <a href={(c.pdfUrl || '').startsWith('http') ? c.pdfUrl : `${STATIC_URL}${c.pdfUrl}`} target="_blank" rel="noreferrer" className="text-xs text-yellow-600 hover:underline">View PDF</a>
+                    <a href={`${API_URL}/books/${selectedBook._id}/chapters/${c._id}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-yellow-600 hover:underline">View PDF</a>
                   </div>
                 ))}
               </div>
