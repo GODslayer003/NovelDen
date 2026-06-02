@@ -25,9 +25,18 @@ const parseCloudinaryUrl = (value) => {
   }
 };
 
+const cloudinaryCloudNamePattern = /^[a-zA-Z0-9-]+$/;
+const isValidCloudName = (value) =>
+  Boolean(value && cloudinaryCloudNamePattern.test(value));
+
 const cloudinaryUrlConfig = parseCloudinaryUrl(process.env.CLOUDINARY_URL);
+const explicitCloudName = process.env.CLOUDINARY_CLOUD_NAME;
+const resolvedCloudName = isValidCloudName(explicitCloudName)
+  ? explicitCloudName
+  : cloudinaryUrlConfig.cloud_name;
+
 const cloudinaryConfig = {
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || cloudinaryUrlConfig.cloud_name,
+  cloud_name: resolvedCloudName,
   api_key: process.env.CLOUDINARY_API_KEY || cloudinaryUrlConfig.api_key,
   api_secret: process.env.CLOUDINARY_API_SECRET || cloudinaryUrlConfig.api_secret
 };
@@ -42,10 +51,17 @@ const imageMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const audioMimeTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/aac', 'audio/mp4', 'audio/webm'];
 const videoMimeTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
 
-const cloudinaryCloudNamePattern = /^[a-zA-Z0-9-]+$/;
-
 const hasCloudinaryConfig = () =>
   Boolean(cloudinaryConfig.cloud_name && cloudinaryConfig.api_key && cloudinaryConfig.api_secret);
+
+export const getUploadConfigStatus = () => ({
+  configured: hasCloudinaryConfig() && isValidCloudName(cloudinaryConfig.cloud_name),
+  cloudNamePresent: Boolean(cloudinaryConfig.cloud_name),
+  cloudNameLooksValid: isValidCloudName(cloudinaryConfig.cloud_name),
+  apiKeyPresent: Boolean(cloudinaryConfig.api_key),
+  apiSecretPresent: Boolean(cloudinaryConfig.api_secret),
+  cloudinaryUrlPresent: Boolean(process.env.CLOUDINARY_URL)
+});
 
 const uploadConfigGuard = (req, res, next) => {
   if (!hasCloudinaryConfig()) {
@@ -54,7 +70,7 @@ const uploadConfigGuard = (req, res, next) => {
     });
   }
 
-  if (!cloudinaryCloudNamePattern.test(cloudinaryConfig.cloud_name)) {
+  if (!isValidCloudName(cloudinaryConfig.cloud_name)) {
     return res.status(503).json({
       error: 'Cloudinary is misconfigured: CLOUDINARY_CLOUD_NAME must be your Cloudinary cloud name, not an upload preset, folder name, or MediaFlows id.'
     });

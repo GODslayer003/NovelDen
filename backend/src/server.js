@@ -14,6 +14,7 @@ import writersRouter from './routes/writers.js'
 import newsRouter    from './routes/news.js'
 import usersRouter   from './routes/users.js'
 import profileRouter from './routes/profile.js'
+import { getUploadConfigStatus } from './middleware/cloudinary-upload.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // Load dotenv from backend/.env if present, otherwise fallback to workspace root .env
@@ -89,6 +90,13 @@ app.use(express.urlencoded({ limit: '30mb', extended: true }))
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')))
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', message: 'Novel Den API running' }))
+app.get('/api/health/uploads', (_, res) => {
+  const uploadConfig = getUploadConfigStatus()
+  res.status(uploadConfig.configured ? 200 : 503).json({
+    status: uploadConfig.configured ? 'ok' : 'misconfigured',
+    uploadConfig
+  })
+})
 app.use('/api/books',   booksRouter)
 app.use('/api/auth',    authRouter)
 app.use('/api/writers', writersRouter)
