@@ -129,9 +129,7 @@ export default function Story() {
         setActiveChapter(chap)
         setChapterLocked(false)
         setLockMessage('')
-        // Serve PDF with cache buster to avoid cached X-Frame-Options
-        const pdf = res.data.pdfUrl || '';
-        setPdfUrl(`${(pdf.startsWith('http') ? pdf : `${STATIC_URL}${pdf}`)}?t=${Date.now()}`)
+        setPdfUrl(`${API_URL}/books/${id}/chapters/${chap._id}/pdf?t=${Date.now()}`)
 
         // Save last read chapter to local storage
         const readInfo = { id: chap._id, title: chap.title }

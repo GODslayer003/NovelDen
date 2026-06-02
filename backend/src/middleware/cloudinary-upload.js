@@ -90,9 +90,9 @@ const isAudio = (file) => audioMimeTypes.includes(file.mimetype) || file.mimetyp
 const isVideo = (file) => videoMimeTypes.includes(file.mimetype) || file.mimetype.startsWith('video/');
 const isPDF = (file) => file.mimetype === 'application/pdf';
 
-const mediaParams = (folder, allowedFormats) => ({
+const mediaParams = (folder, allowedFormats, resourceType = 'auto') => ({
   folder,
-  resource_type: 'auto',
+  resource_type: resourceType,
   allowed_formats: allowedFormats,
   type: 'upload'
 });
@@ -104,7 +104,7 @@ const imageStorage = new CloudinaryStorage({
 
 const pdfStorage = new CloudinaryStorage({
   cloudinary: cloudinary.v2,
-  params: mediaParams('novelDen/pdfs', ['pdf'])
+  params: mediaParams('novelDen/pdfs', ['pdf'], 'raw')
 });
 
 const writerMediaStorage = new CloudinaryStorage({

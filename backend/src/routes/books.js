@@ -1,8 +1,80 @@
 import express from 'express';
+import fs from 'fs';
+import http from 'http';
+import https from 'https';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import Book from '../models/Book.js';
 import { uploadImage, uploadPDF, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
 
 const router = express.Router();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const uploadRoot = path.resolve(__dirname, '../public/uploads');
+
+const isHttpUrl = (value) => /^https?:\/\//i.test(value || '');
+
+const cloudinaryPdfCandidates = (pdfUrl) => {
+  const candidates = [pdfUrl];
+  if (/res\.cloudinary\.com/i.test(pdfUrl)) {
+    candidates.push(
+      pdfUrl.replace('/image/upload/', '/raw/upload/'),
+      pdfUrl.replace('/video/upload/', '/raw/upload/')
+    );
+  }
+
+  return [...new Set(candidates)];
+};
+
+const isSafeUploadPath = (filePath) =>
+  filePath === uploadRoot || filePath.startsWith(`${uploadRoot}${path.sep}`);
+
+const parseRangeHeader = (rangeHeader, fileSize) => {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader || '');
+  if (!match) return null;
+
+  let start = match[1] ? Number(match[1]) : 0;
+  let end = match[2] ? Number(match[2]) : fileSize - 1;
+
+  if (!match[1] && match[2]) {
+    start = Math.max(fileSize - Number(match[2]), 0);
+    end = fileSize - 1;
+  }
+
+  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= fileSize) {
+    return null;
+  }
+
+  return { start, end: Math.min(end, fileSize - 1) };
+};
+
+const requestRemoteFile = (url, headers = {}, redirectCount = 0) => new Promise((resolve, reject) => {
+  const parsedUrl = new URL(url);
+  const client = parsedUrl.protocol === 'http:' ? http : https;
+
+  const req = client.get(parsedUrl, { headers }, (remoteRes) => {
+    const redirectUrl = remoteRes.headers.location;
+    if ([301, 302, 303, 307, 308].includes(remoteRes.statusCode) && redirectUrl && redirectCount < 5) {
+      remoteRes.resume();
+      return resolve(requestRemoteFile(new URL(redirectUrl, parsedUrl).toString(), headers, redirectCount + 1));
+    }
+
+    resolve(remoteRes);
+  });
+
+  req.setTimeout(30000, () => {
+    req.destroy(new Error('Timed out while loading PDF'));
+  });
+  req.on('error', reject);
+});
+
+const sendPdfHeaders = (res, contentLength) => {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (contentLength) res.setHeader('Content-Length', contentLength);
+};
 
 router.get('/', async (req, res) => {
   try {
@@ -150,6 +222,68 @@ router.post('/:id/chapters', uploadPDF.single('pdfFile'), async (req, res) => {
     book.chapters.push({ title, type, order: Number(order), pdfUrl });
     await book.save();
     res.status(201).json(book);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/:id/chapters/:chapId/pdf', async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+
+    const chapter = book.chapters.id(req.params.chapId);
+    if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+    if (!chapter.pdfUrl) return res.status(404).json({ error: 'PDF not found' });
+
+    if (!isHttpUrl(chapter.pdfUrl)) {
+      const relativePath = chapter.pdfUrl.replace(/^\/uploads\//, '');
+      const filePath = path.resolve(uploadRoot, relativePath);
+
+      if (!isSafeUploadPath(filePath) || !fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'PDF file not found' });
+      }
+
+      const stat = fs.statSync(filePath);
+      const range = parseRangeHeader(req.headers.range, stat.size);
+      if (req.headers.range && !range) {
+        res.setHeader('Content-Range', `bytes */${stat.size}`);
+        return res.status(416).end();
+      }
+
+      if (range) {
+        const contentLength = range.end - range.start + 1;
+        sendPdfHeaders(res, contentLength);
+        res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${stat.size}`);
+        res.status(206);
+        return fs.createReadStream(filePath, range).pipe(res);
+      }
+
+      sendPdfHeaders(res, stat.size);
+      return fs.createReadStream(filePath).pipe(res);
+    }
+
+    let lastStatus = 502;
+    for (const candidateUrl of cloudinaryPdfCandidates(chapter.pdfUrl)) {
+      const remoteRes = await requestRemoteFile(
+        candidateUrl,
+        req.headers.range ? { Range: req.headers.range } : {}
+      );
+      lastStatus = remoteRes.statusCode || lastStatus;
+
+      if (lastStatus >= 200 && lastStatus < 300) {
+        sendPdfHeaders(res, remoteRes.headers['content-length']);
+        if (remoteRes.headers['content-range']) {
+          res.setHeader('Content-Range', remoteRes.headers['content-range']);
+        }
+        if (lastStatus === 206) res.status(206);
+        return remoteRes.pipe(res);
+      }
+
+      remoteRes.resume();
+    }
+
+    return res.status(lastStatus).json({ error: 'Failed to load PDF document' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
