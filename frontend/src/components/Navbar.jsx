@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { gsap } from 'gsap'
 import { useAuthStore } from '../context/authStore'
 import AuthModal from './AuthModal'
+import { STATIC_URL } from '../utils/api'
 
 const NAV_LINKS = [
   { label: 'Home',      path: '/' },
@@ -75,7 +76,7 @@ export default function Navbar() {
                 <Link to="/profile" className="relative group">
                   <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#d4a574]/40 hover:border-[#d4a574] transition-all duration-300 hover:scale-110 hover:shadow-[0_0_15px_rgba(212,165,116,0.3)]">
                     {user.avatar ? (
-                      <img src={user.avatar.startsWith('http') ? user.avatar : `${import.meta.env.VITE_STATIC_URL}${user.avatar}`} alt={user.name} className="w-full h-full object-cover" />
+                      <img src={user.avatar.startsWith('http') ? user.avatar : `${STATIC_URL}${user.avatar}`} alt={user.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-sm font-bold font-sans" style={{ background: 'linear-gradient(135deg, #d4a574, #c08040)', color: '#1a0f00' }}>
                         {user.name?.charAt(0)?.toUpperCase()}

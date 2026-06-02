@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Book from '../models/Book.js';
 import { uploadImage, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
+import { publicAssetUrl } from '../utils/assets.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_fallback_secret';
@@ -92,7 +93,7 @@ router.get('/', authMiddleware, async (req, res) => {
         id: req.user._id,
         name: req.user.name,
         email: req.user.email,
-        avatar: req.user.avatar,
+        avatar: publicAssetUrl(req.user.avatar),
         role: req.user.role,
         createdAt: req.user.createdAt
       },

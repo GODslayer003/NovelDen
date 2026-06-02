@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 // Using Brevo HTTP API for production email delivery; no raw SMTP required
 import User from '../models/User.js';
 import Otp from '../models/Otp.js';
+import { publicAssetUrl } from '../utils/assets.js';
 
 const router = express.Router();
 
@@ -303,7 +304,7 @@ router.get('/me', async (req, res) => {
     const user = await User.findById(decoded.id).select('-password');
     if (!user) return res.status(404).json({ error: 'User not found' });
     
-    res.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role, avatar: user.avatar || '' } });
+    res.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role, avatar: publicAssetUrl(user.avatar) } });
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });
   }

@@ -3,13 +3,14 @@ import bcrypt from 'bcryptjs';
 import Writer from '../models/Writer.js';
 import User from '../models/User.js';
 import { uploadWriterMedia, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
+import { publicWriter } from '../utils/assets.js';
 
 const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
     const writers = await Writer.find().populate('books');
-    res.json(writers);
+    res.json(writers.map(publicWriter));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -19,7 +20,7 @@ router.get('/:id', async (req, res) => {
   try {
     const writer = await Writer.findById(req.params.id).populate('books');
     if (!writer) return res.status(404).json({ error: 'Writer not found' });
-    res.json(writer);
+    res.json(publicWriter(writer));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -54,7 +55,7 @@ router.post('/', uploadWriterMedia.fields([{ name: 'avatar', maxCount: 1 }, { na
       });
     }
     
-    res.status(201).json(writer);
+    res.status(201).json(publicWriter(writer));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -98,7 +99,7 @@ router.put('/:id', uploadWriterMedia.fields([{ name: 'avatar', maxCount: 1 }, { 
         });
       }
     }
-    res.json(updatedWriter);
+    res.json(publicWriter(updatedWriter));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

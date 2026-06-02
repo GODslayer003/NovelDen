@@ -1,13 +1,24 @@
 import express from 'express';
 import News from '../models/News.js';
 import { uploadNewsMedia, deleteCloudinaryFile } from '../middleware/cloudinary-upload.js';
+import { publicAssetUrl, publicWriter } from '../utils/assets.js';
 
 const router = express.Router();
+
+const publicNews = (news) => {
+  const data = typeof news.toObject === 'function' ? news.toObject() : { ...news };
+
+  return {
+    ...data,
+    mediaUrl: publicAssetUrl(data.mediaUrl),
+    writerId: data.writerId ? publicWriter(data.writerId) : data.writerId
+  };
+};
 
 router.get('/', async (req, res) => {
   try {
     const news = await News.find().populate('writerId', 'name avatar').sort({ createdAt: -1 });
-    res.json(news);
+    res.json(news.map(publicNews));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -36,7 +47,7 @@ router.post('/', uploadNewsMedia.single('media'), async (req, res) => {
     });
     
     const populatedNews = await news.populate('writerId', 'name avatar');
-    res.status(201).json(populatedNews);
+    res.status(201).json(publicNews(populatedNews));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

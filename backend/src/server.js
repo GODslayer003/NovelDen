@@ -98,8 +98,11 @@ app.use('/api/profile', profileRouter)
 
 // Error Handler
 app.use((err, req, res, next) => {
-  const status = err.status || (err instanceof multer.MulterError ? 400 : 500)
-  const message = status >= 500 && process.env.NODE_ENV === 'production'
+  const isCloudinaryAuthError = err.http_code === 401 || /Invalid cloud_name/i.test(err.message || '')
+  const status = err.status || (err instanceof multer.MulterError ? 400 : (isCloudinaryAuthError ? 503 : 500))
+  const message = isCloudinaryAuthError
+    ? 'Cloudinary upload is misconfigured. Check CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET on the server.'
+    : status >= 500 && process.env.NODE_ENV === 'production'
     ? 'Internal Server Error'
     : err.message || 'Internal Server Error'
 

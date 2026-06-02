@@ -8,24 +8,59 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, '../../../.env') });
 
+const parseCloudinaryUrl = (value) => {
+  if (!value) return {};
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'cloudinary:') return {};
+
+    return {
+      cloud_name: url.hostname,
+      api_key: decodeURIComponent(url.username),
+      api_secret: decodeURIComponent(url.password)
+    };
+  } catch {
+    return {};
+  }
+};
+
+const cloudinaryUrlConfig = parseCloudinaryUrl(process.env.CLOUDINARY_URL);
+const cloudinaryConfig = {
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || cloudinaryUrlConfig.cloud_name,
+  api_key: process.env.CLOUDINARY_API_KEY || cloudinaryUrlConfig.api_key,
+  api_secret: process.env.CLOUDINARY_API_SECRET || cloudinaryUrlConfig.api_secret
+};
+
 cloudinary.v2.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name: cloudinaryConfig.cloud_name,
+  api_key: cloudinaryConfig.api_key,
+  api_secret: cloudinaryConfig.api_secret
 });
 
 const imageMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const audioMimeTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/aac', 'audio/mp4', 'audio/webm'];
 const videoMimeTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
 
+const cloudinaryCloudNamePattern = /^[a-zA-Z0-9-]+$/;
+
 const hasCloudinaryConfig = () =>
-  Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+  Boolean(cloudinaryConfig.cloud_name && cloudinaryConfig.api_key && cloudinaryConfig.api_secret);
 
 const uploadConfigGuard = (req, res, next) => {
-  if (hasCloudinaryConfig()) return next();
-  return res.status(503).json({
-    error: 'File uploads are not configured. Please set Cloudinary environment variables on the server.'
-  });
+  if (!hasCloudinaryConfig()) {
+    return res.status(503).json({
+      error: 'File uploads are not configured. Please set Cloudinary environment variables on the server.'
+    });
+  }
+
+  if (!cloudinaryCloudNamePattern.test(cloudinaryConfig.cloud_name)) {
+    return res.status(503).json({
+      error: 'Cloudinary is misconfigured: CLOUDINARY_CLOUD_NAME must be your Cloudinary cloud name, not an upload preset, folder name, or MediaFlows id.'
+    });
+  }
+
+  return next();
 };
 
 const createFileTypeError = (message) => {

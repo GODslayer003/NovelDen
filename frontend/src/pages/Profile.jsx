@@ -4,9 +4,7 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 import { gsap } from 'gsap'
 import { useAuthStore } from '../context/authStore'
-
-const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL
-const STATIC_URL = import.meta.env.VITE_STATIC_URL
+import { API_URL, STATIC_URL } from '../utils/api'
 
 export default function Profile() {
   const { user, setUser } = useAuthStore()

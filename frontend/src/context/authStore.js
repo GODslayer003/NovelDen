@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-
-const API_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_URL
+import { API_URL } from '../utils/api'
 
 // Set axios defaults
 const token = localStorage.getItem('novelden_token')
