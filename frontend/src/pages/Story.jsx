@@ -3,12 +3,105 @@ import { useParams, Link } from 'react-router-dom'
 import { gsap } from 'gsap'
 import axios from 'axios'
 import toast from 'react-hot-toast'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { useAuthStore } from '../context/authStore'
 import AuthModal from '../components/AuthModal'
 
 import { API_URL, STATIC_URL } from '../utils/api'
 
 const CHAPTERS_PER_PAGE = 10
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+
+function InlinePdfCanvas({ url, title, onError }) {
+  const containerRef = useRef(null)
+  const renderTaskRef = useRef(null)
+  const [pageCanvases, setPageCanvases] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    let pdfDoc = null
+
+    const renderPdf = async () => {
+      if (!url || !containerRef.current) return
+
+      setLoading(true)
+      setPageCanvases([])
+      try {
+        renderTaskRef.current?.cancel()
+        const res = await axios.get(url, { responseType: 'arraybuffer' })
+        const loadingTask = pdfjsLib.getDocument({ data: res.data })
+        pdfDoc = await loadingTask.promise
+        const width = Math.max(containerRef.current.clientWidth - 24, 280)
+        const renderedPages = []
+
+        for (let pageNumber = 1; pageNumber <= pdfDoc.numPages; pageNumber += 1) {
+          if (cancelled) break
+          const page = await pdfDoc.getPage(pageNumber)
+          const baseViewport = page.getViewport({ scale: 1 })
+          const cssScale = width / baseViewport.width
+          const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
+          const viewport = page.getViewport({ scale: cssScale * pixelRatio })
+          const canvas = document.createElement('canvas')
+          const context = canvas.getContext('2d')
+
+          canvas.width = Math.floor(viewport.width)
+          canvas.height = Math.floor(viewport.height)
+          canvas.style.width = `${Math.floor(viewport.width / pixelRatio)}px`
+          canvas.style.height = `${Math.floor(viewport.height / pixelRatio)}px`
+
+          const renderTask = page.render({ canvasContext: context, viewport })
+          renderTaskRef.current = renderTask
+          await renderTask.promise
+          renderedPages.push(canvas.toDataURL('image/jpeg', 0.92))
+          page.cleanup()
+        }
+
+        if (!cancelled) setPageCanvases(renderedPages)
+      } catch (err) {
+        if (!cancelled && err?.name !== 'RenderingCancelledException') {
+          onError?.('Failed to render this PDF in the reader. Please try again.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+        pdfDoc?.destroy?.()
+      }
+    }
+
+    renderPdf()
+    return () => {
+      cancelled = true
+      renderTaskRef.current?.cancel()
+      pdfDoc?.destroy?.()
+    }
+  }, [url, onError])
+
+  return (
+    <div ref={containerRef} className="h-full overflow-y-auto bg-[#202124] px-3 py-4">
+      {loading ? (
+        <div className="min-h-full flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-coffee-300 font-sans text-xs">
+            <div className="h-10 w-10 rounded-full border-2 border-[#d4a574]/30 border-t-[#d4a574] animate-spin" />
+            <span>Preparing pages...</span>
+          </div>
+        </div>
+      ) : (
+        <div className="mx-auto flex w-full max-w-[720px] flex-col items-center gap-4">
+          {pageCanvases.map((src, index) => (
+            <img
+              key={`${title}-${index}`}
+              src={src}
+              alt={`${title} page ${index + 1}`}
+              className="w-full bg-white shadow-lg"
+              loading={index < 2 ? 'eager' : 'lazy'}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function Story() {
   const { id } = useParams()
@@ -32,6 +125,7 @@ export default function Story() {
   const [pdfUrl, setPdfUrl] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState('')
+  const [mobileDiscussionsOpen, setMobileDiscussionsOpen] = useState(false)
 
   // Comments & Reviews State
   const [comments, setComments] = useState([])
@@ -138,6 +232,7 @@ export default function Story() {
         setLockMessage('')
         setPdfUrl('')
         setPdfError('')
+        setMobileDiscussionsOpen(false)
         setPdfLoading(true)
 
         setPdfUrl(`${API_URL}/books/${id}/chapters/${chap._id}/pdf?t=${Date.now()}`)
@@ -597,7 +692,7 @@ export default function Story() {
                }}>
             
             {/* Left Hand: PDF Viewer / Lock Screen */}
-            <div className="flex flex-col h-[68dvh] md:h-full md:flex-1 border-b md:border-b-0 md:border-r border-coffee-900">
+            <div className="flex flex-col h-full md:flex-1 border-b md:border-b-0 md:border-r border-coffee-900">
               {/* Top Title Bar */}
               <div className="p-4 flex items-center justify-between border-b border-coffee-900 bg-coffee-950/80">
                 <div>
@@ -662,33 +757,38 @@ export default function Story() {
                         title={activeChapter.title}
                       />
                     </object>
-                    <div className="md:hidden h-full flex flex-col">
-                      <iframe
-                        src={`${pdfUrl}#toolbar=0&navpanes=0&view=FitH`}
-                        className="flex-1 w-full border-none bg-white"
+                    <div className="md:hidden h-full">
+                      <InlinePdfCanvas
+                        url={pdfUrl}
                         title={activeChapter.title}
+                        onError={setPdfError}
                       />
-                      <div className="shrink-0 flex items-center justify-between gap-3 border-t border-coffee-900 bg-coffee-950/95 px-4 py-3">
-                        <span className="font-sans text-[11px] text-coffee-400 leading-tight">
-                          If your browser shows a PDF card, open it directly for the best mobile reading view.
-                        </span>
-                        <a
-                          href={pdfUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="shrink-0 rounded-lg px-4 py-2 font-sans text-xs font-bold text-espresso bg-yellow-600"
-                        >
-                          Open PDF
-                        </a>
-                      </div>
                     </div>
                   </div>
                 )}
               </div>
+
+              {!chapterLocked && (
+                <button
+                  type="button"
+                  onClick={() => setMobileDiscussionsOpen(true)}
+                  className="md:hidden absolute bottom-4 right-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-600 text-espresso shadow-xl shadow-black/40 border border-yellow-400/30"
+                  aria-label="Open discussions and reviews"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+                  </svg>
+                  {feed.length > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-5 h-5 rounded-full bg-coffee-950 px-1 text-[10px] font-bold leading-5 text-yellow-400 border border-yellow-600">
+                      {feed.length}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Right Hand: Comments & Review Tabs */}
-            <div className="w-full md:w-96 flex-1 md:h-full min-h-0 flex flex-col bg-coffee-950/40">
+            <div className="hidden w-full md:w-96 flex-1 md:h-full min-h-0 md:flex flex-col bg-coffee-950/40">
               
               {/* Tab Header Selector */}
               <div className="flex border-b border-coffee-900 bg-coffee-950 items-center justify-between">
@@ -851,6 +951,159 @@ export default function Story() {
                 </div>
               </div>
             </div>
+
+            {mobileDiscussionsOpen && (
+              <div className="md:hidden absolute inset-0 z-20 flex items-end bg-black/55">
+                <button
+                  type="button"
+                  className="absolute inset-0 cursor-default"
+                  aria-label="Close discussions"
+                  onClick={() => setMobileDiscussionsOpen(false)}
+                />
+                <div className="relative flex h-[82dvh] w-full flex-col rounded-t-3xl border border-coffee-800 bg-[#140c00] shadow-2xl">
+                  <div className="shrink-0 flex items-center justify-between border-b border-coffee-900 bg-coffee-950 px-5 py-4 rounded-t-3xl">
+                    <div>
+                      <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-[#d4a574]">
+                        Discussions & Reviews ({feed.length})
+                      </h3>
+                      <p className="mt-1 font-sans text-[11px] text-coffee-500">{activeChapter.title}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMobileDiscussionsOpen(false)}
+                      className="text-3xl leading-none text-coffee-400 hover:text-coffee-200"
+                      aria-label="Close discussions"
+                    >
+                      &times;
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div className="rounded-2xl border border-coffee-800 bg-coffee-950/80 p-4 text-center">
+                      <div className="font-serif text-3xl font-black text-yellow-400">
+                        {averageRating > 0 ? `★ ${averageRating}` : '★ 0.0'}
+                      </div>
+                      <div className="mt-1 font-sans text-[10px] uppercase tracking-widest text-coffee-400">
+                        Chapter Average Review
+                      </div>
+                    </div>
+
+                    {user ? (
+                      <form onSubmit={handleAddDiscussion} className="space-y-3 rounded-2xl border border-coffee-800 bg-coffee-950/50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="font-sans text-xs text-coffee-300">
+                            {newRating > 0 ? 'Writing Review' : 'Writing Comment'}
+                          </label>
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => setNewRating(newRating === star ? 0 : star)}
+                                className="text-xl text-yellow-500 active:scale-95"
+                                title="Click again to clear rating"
+                                disabled={userHasTopLevelDiscussion}
+                              >
+                                {star <= newRating ? '★' : '☆'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {userHasTopLevelDiscussion ? (
+                          <div className="rounded-xl border border-red-900/30 bg-red-900/10 p-3 text-center font-sans text-xs text-red-400">
+                            You have already posted on this chapter. You can still reply to comments.
+                          </div>
+                        ) : (
+                          <>
+                            <textarea
+                              rows={4}
+                              required={newRating === 0}
+                              value={newComment}
+                              onChange={e => setNewComment(e.target.value)}
+                              placeholder={newRating > 0 ? "Write your review (optional)..." : "Write a public comment..."}
+                              className="w-full rounded-xl border border-yellow-600/20 bg-black/30 p-3 font-sans text-sm text-[#F5E6D3] outline-none focus:border-yellow-600"
+                            />
+                            <button
+                              type="submit"
+                              className="w-full rounded-xl bg-yellow-600 py-3 font-sans text-xs font-bold uppercase tracking-wider text-espresso"
+                            >
+                              {newRating > 0 ? 'Submit Review' : 'Post Comment'}
+                            </button>
+                          </>
+                        )}
+                      </form>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-coffee-800 bg-coffee-950/30 p-4 text-center font-sans text-xs text-coffee-400">
+                        Please <button onClick={() => setAuthOpen(true)} className="font-semibold text-yellow-600 hover:underline">sign in</button> to comment or review.
+                      </div>
+                    )}
+
+                    <div className="space-y-3 pb-4">
+                      {feed.length === 0 ? (
+                        <p className="py-8 text-center font-sans text-xs text-coffee-500">No discussions on this chapter yet.</p>
+                      ) : (
+                        feed.map(item => (
+                          <div key={item._id} className="rounded-2xl border border-coffee-800 bg-coffee-950/60 p-4">
+                            <div className="mb-2 flex items-start justify-between gap-3">
+                              <div>
+                                <div className="font-sans text-sm font-bold text-coffee-100">{item.userName}</div>
+                                {item.isReview && (
+                                  <div className="mt-1 text-xs font-bold text-yellow-500">{'★'.repeat(item.rating)}</div>
+                                )}
+                              </div>
+                              <span className="shrink-0 font-mono text-[10px] text-coffee-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+                            </div>
+
+                            {(item.content || item.comment) && (
+                              <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-coffee-300">
+                                {item.content || item.comment}
+                              </p>
+                            )}
+
+                            {!item.isReview && (
+                              <div className="mt-3 border-l-2 border-coffee-800/60 pl-3">
+                                {item.replies && item.replies.map(reply => (
+                                  <div key={reply._id} className="mb-2 rounded-xl bg-coffee-900/25 p-3 font-sans text-xs text-coffee-300">
+                                    <div className="mb-1 flex items-center justify-between gap-2">
+                                      <span className="font-bold text-coffee-100">{reply.userName}</span>
+                                      <span className="font-mono text-[9px] text-coffee-500">{new Date(reply.createdAt).toLocaleDateString()}</span>
+                                    </div>
+                                    <p>{reply.content}</p>
+                                  </div>
+                                ))}
+
+                                {user && (replyingTo === item._id ? (
+                                  <form onSubmit={(e) => handleReply(e, item._id)} className="mt-2 space-y-2">
+                                    <input
+                                      type="text"
+                                      required
+                                      autoFocus
+                                      value={replyContent}
+                                      onChange={(e) => setReplyContent(e.target.value)}
+                                      placeholder="Write a reply..."
+                                      className="w-full rounded-xl border border-yellow-600/20 bg-black/40 px-3 py-2 font-sans text-xs text-[#F5E6D3] outline-none focus:border-yellow-600"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      <button type="submit" className="rounded-lg bg-yellow-600 px-4 py-2 text-xs font-bold text-espresso">Post</button>
+                                      <button type="button" onClick={() => {setReplyingTo(null); setReplyContent('')}} className="px-2 py-2 text-xs text-coffee-400">Cancel</button>
+                                    </div>
+                                  </form>
+                                ) : (
+                                  <button onClick={() => setReplyingTo(item._id)} className="mt-2 text-[10px] font-bold uppercase tracking-wider text-yellow-600">
+                                    Reply to this
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
